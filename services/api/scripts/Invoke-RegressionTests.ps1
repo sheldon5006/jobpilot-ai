@@ -21,6 +21,13 @@ try {
 $profileAnchors = @()
 $profileAnchors += @($profile.professionalSkills)
 $profileAnchors += @($profile.projectAndAcademicSkills)
+$profileAnchors += @($profile.professionalSummary)
+$profileAnchors += @($profile.education)
+$profileAnchors += @($profile.certifications)
+$profileAnchors += @($profile.workAuthorization)
+foreach ($language in @($profile.languages)) {
+    $profileAnchors += @("$($language.language) $($language.proficiency)")
+}
 foreach ($experience in @($profile.experience)) {
     $profileAnchors += @($experience.evidence)
 }
@@ -136,6 +143,24 @@ $cases = @(
         Name = "3 - German C2 mandatory"
         JobTitle = ".NET Developer - German C2 Required"
         JobDescription = "Required: development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. Applicants must already demonstrate German proficiency at CEFR C2 before starting. This is a strict mandatory requirement, not a preference. Candidates who are still learning German do not meet this requirement."
+    },
+    [pscustomobject]@{
+        Name = "4 - Work authorization gate"
+        JobTitle = ".NET Software Developer - Right to Work Required"
+        JobDescription = "Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. Applicants must already have the legal right to work in Germany. The employer cannot provide visa sponsorship. No degree or language requirement is specified."
+        ExpectedQuestionPattern = "authori[sz]ed|right to work|sponsorship|work eligibility"
+    },
+    [pscustomobject]@{
+        Name = "5 - Mandatory certification"
+        JobTitle = ".NET Software Developer - AWS Certification Required"
+        JobDescription = "Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. An AWS Certified Developer - Associate certification is mandatory before starting; the candidate must currently hold this credential, not merely be preparing for it. No language requirement is specified."
+        ExpectedQuestionPattern = "AWS|certification|credential|certificate"
+    },
+    [pscustomobject]@{
+        Name = "6 - Werkstudent enrolment"
+        JobTitle = "Werkstudent Software Developer (.NET)"
+        JobDescription = "Applicants must be currently enrolled at a university throughout employment. Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. No additional degree, language, or employment-duration requirement is specified."
+        ExpectedQuestionPattern = "enrolled|student status|university|education"
     }
 )
 
@@ -179,11 +204,20 @@ function Get-QualityIssues {
     $issues = [System.Collections.Generic.List[string]]::new()
     $vacancy = [string]$Case.JobTitle + [Environment]::NewLine + [string]$Case.JobDescription
 
-    # These controlled scenarios explicitly need no follow-up questions.
+    # Controlled scenarios permit only a narrowly-scoped question when a mandatory
+    # eligibility fact is intentionally absent from the profile.
     foreach ($question in @($Result.questionsToVerify)) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$question)) {
-            $issues.Add("UNSUPPORTED_QUESTION: '$question'")
+        if ([string]::IsNullOrWhiteSpace([string]$question)) {
+            continue
         }
+
+        $expectedQuestionPattern = [string]$Case.ExpectedQuestionPattern
+        if (-not [string]::IsNullOrWhiteSpace($expectedQuestionPattern) -and
+            [regex]::IsMatch([string]$question, $expectedQuestionPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            continue
+        }
+
+        $issues.Add("UNSUPPORTED_QUESTION: '$question'")
     }
 
     # A match must correspond to vacancy text, and its evidence must cite the local profile.
@@ -264,6 +298,97 @@ function Test-ExpectedScenario {
                 $questions.Count -eq 0
             )
         }
+        "4 - Work authorization gate" {
+            $authStatus = [string]$profile.workAuthorization
+            $authUnknown = [string]::IsNullOrWhiteSpace($authStatus) -or
+                $authStatus -match "\b(replace|unknown|not specified|not provided|tbd|n/a)\b"
+            $authRequiresSponsorship = $authStatus -match "\b(?:require|requires|need|needs)\s+(?:(?:visa|employer|work)\s+)?sponsorship\b"
+            $authExplicitlyUnmet = $authStatus -match "\b(?:not\s+(?:currently\s+)?authori[sz]ed|not\s+eligible\s+to\s+work|no\s+legal\s+right\s+to\s+work|does\s+not\s+have\s+(?:the\s+)?right\s+to\s+work)\b"
+            $authPositive = $authStatus -match "\b(?:authori[sz]ed|eligible|legal\s+right|right\s+to\s+work|valid\s+work\s+permit)\b" -and
+                -not $authExplicitlyUnmet -and
+                $authStatus -notmatch "\b(?:student\s+(?:visa|residence\s+permit)|limited\s+working\s+hours|work\s+limits?)\b"
+
+            $authGaps = @($gaps | Where-Object { $_.requirement -match "authori[sz]ation|right to work|sponsorship|work eligibility" })
+            if ($authUnknown -or (-not $authRequiresSponsorship -and -not $authExplicitlyUnmet -and -not $authPositive)) {
+                return (
+                    $Result.recommendation -eq "Review" -and
+                    $authGaps.Count -eq 1 -and
+                    $authGaps[0].severity -eq "Must-have" -and
+                    $authGaps[0].status -eq "Unverified" -and
+                    $questions.Count -eq 1
+                )
+            }
+
+            if ($authRequiresSponsorship -or $authExplicitlyUnmet) {
+                return (
+                    $Result.recommendation -eq "Skip" -and
+                    $authGaps.Count -eq 1 -and
+                    $authGaps[0].severity -eq "Must-have" -and
+                    $authGaps[0].status -eq "Unmet" -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            return (
+                $authPositive -and
+                $Result.recommendation -eq "Apply" -and
+                $authGaps.Count -eq 0 -and
+                $questions.Count -eq 0
+            )
+        }
+        "5 - Mandatory certification" {
+            $certs = @($profile.certifications)
+            $hasAwsCredential = @($certs | Where-Object { [string]$_ -match "AWS\s+Certified\s+Developer(?:\s*[-–]\s*Associate)?" }).Count -gt 0
+            $awsGaps = @($gaps | Where-Object { $_.requirement -match "AWS|certification|certificate" })
+            if ($hasAwsCredential) {
+                return (
+                    $Result.recommendation -eq "Apply" -and
+                    $awsGaps.Count -eq 0 -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            return (
+                $Result.recommendation -eq "Review" -and
+                $awsGaps.Count -eq 1 -and
+                $awsGaps[0].severity -eq "Must-have" -and
+                $awsGaps[0].status -eq "Unverified" -and
+                $questions.Count -eq 1
+            )
+        }
+        "6 - Werkstudent enrolment" {
+            $educationText = (@($profile.education) -join " ")
+            $constraintsText = (@($profile.constraints) -join " ")
+            $activeStudent = $educationText -match "\b(?:in\s+progress|ongoing|currently\s+studying|currently\s+enrolled|enrolled|expected\s+graduation|expected\s+completion)\b"
+            $notEnrolled = ($educationText + " " + $constraintsText) -match "\b(?:not\s+currently\s+enrolled|not\s+enrolled|not\s+currently\s+studying|no\s+longer\s+enrolled)\b"
+            $studentGaps = @($gaps | Where-Object { $_.requirement -match "Werkstudent|working student|enrolled|enrollment|enrolment|student status" })
+
+            if ($activeStudent -and -not $notEnrolled) {
+                return (
+                    $Result.recommendation -eq "Apply" -and
+                    $studentGaps.Count -eq 0 -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            if ($notEnrolled) {
+                return (
+                    $Result.recommendation -eq "Skip" -and
+                    $studentGaps.Count -eq 1 -and
+                    $studentGaps[0].severity -eq "Must-have" -and
+                    $studentGaps[0].status -eq "Unmet" -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            return (
+                $Result.recommendation -eq "Review" -and
+                $studentGaps.Count -eq 1 -and
+                $studentGaps[0].severity -eq "Must-have" -and
+                $studentGaps[0].status -eq "Unverified" -and
+                $questions.Count -eq 1
+            )
+        }
     }
 
     return $false
@@ -271,7 +396,10 @@ function Test-ExpectedScenario {
 
 $summary = [System.Collections.Generic.List[object]]::new()
 $allIssues = [System.Collections.Generic.List[string]]::new()
-$strongMatchScores = [System.Collections.Generic.List[int]]::new()
+$scoreSamples = @{}
+foreach ($case in $cases) {
+    $scoreSamples[$case.Name] = [System.Collections.Generic.List[int]]::new()
+}
 
 foreach ($case in $cases) {
     Write-Host ""
@@ -302,9 +430,7 @@ foreach ($case in $cases) {
         $issues += "SCENARIO_EXPECTATION_FAILED: recommendation/gaps/questions did not match expected behaviour."
     }
 
-    if ($case.Name -eq "1 - Strong technical match") {
-        $strongMatchScores.Add([int]$result.matchScore)
-    }
+    $scoreSamples[$case.Name].Add([int]$result.matchScore)
 
     $status = if ($scenarioPassed -and $issues.Count -eq 0) { "PASS" } else { "FAIL" }
     $colour = if ($status -eq "PASS") { "Green" } else { "Red" }
@@ -330,43 +456,47 @@ foreach ($case in $cases) {
     })
 }
 
-if (-not $SkipScoreStability -and $summary.Count -ge 1 -and
-    $summary[0].Test -eq "1 - Strong technical match" -and
-    $summary[0].Status -ne "REQUEST FAILED") {
+if (-not $SkipScoreStability -and $summary.Count -ge 3) {
     Write-Host ""
-    Write-Host "Checking score stability with two repeat requests..." -ForegroundColor Cyan
+    Write-Host "Checking score stability for the three core scenarios..." -ForegroundColor Cyan
 
-    for ($repeat = 2; $repeat -le 3; $repeat++) {
-        $call = Invoke-JobAnalysis -Case $cases[0]
-        if (-not $call.Success) {
-            $allIssues.Add("SCORE_STABILITY: repeat $repeat failed after $($call.Seconds)s - $($call.Error)")
-            Write-Host "Repeat $repeat failed: $($call.Error)" -ForegroundColor Red
-            continue
+    for ($caseIndex = 0; $caseIndex -lt 3; $caseIndex++) {
+        $stabilityCase = $cases[$caseIndex]
+        Write-Host "Scenario: $($stabilityCase.Name)" -ForegroundColor DarkCyan
+
+        for ($repeat = 2; $repeat -le 3; $repeat++) {
+            $call = Invoke-JobAnalysis -Case $stabilityCase
+            if (-not $call.Success) {
+                $allIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat failed after $($call.Seconds)s - $($call.Error)")
+                Write-Host "Repeat $repeat failed: $($call.Error)" -ForegroundColor Red
+                continue
+            }
+
+            $result = $call.Result
+            $scoreSamples[$stabilityCase.Name].Add([int]$result.matchScore)
+            Write-Host "Repeat $($repeat): score $($result.matchScore), recommendation $($result.recommendation), $($call.Seconds)s"
+
+            if (-not (Test-ExpectedScenario -Case $stabilityCase -Result $result)) {
+                $allIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat changed the expected recommendation/gap behaviour.")
+            }
+
+            foreach ($issue in @(Get-QualityIssues -Case $stabilityCase -Result $result)) {
+                $allIssues.Add("SCORE_STABILITY '$($stabilityCase.Name)' repeat $($repeat): $issue")
+            }
         }
 
-        $result = $call.Result
-        $strongMatchScores.Add([int]$result.matchScore)
-        Write-Host "Repeat $($repeat): score $($result.matchScore), recommendation $($result.recommendation), $($call.Seconds)s"
+        $scores = @($scoreSamples[$stabilityCase.Name].ToArray())
+        if ($scores.Count -ge 2) {
+            $minScore = ($scores | Measure-Object -Minimum).Minimum
+            $maxScore = ($scores | Measure-Object -Maximum).Maximum
+            $spread = $maxScore - $minScore
+            Write-Host "Scores: $($scores -join ', '); spread = $spread point(s)."
 
-        if (-not (Test-ExpectedScenario -Case $cases[0] -Result $result)) {
-            $allIssues.Add("SCORE_STABILITY: repeat $repeat changed expected strong-match behaviour.")
-        }
-
-        foreach ($issue in @(Get-QualityIssues -Case $cases[0] -Result $result)) {
-            $allIssues.Add("SCORE_STABILITY repeat $($repeat): $issue")
-        }
-    }
-
-    if ($strongMatchScores.Count -ge 2) {
-        $minScore = ($strongMatchScores | Measure-Object -Minimum).Minimum
-        $maxScore = ($strongMatchScores | Measure-Object -Maximum).Maximum
-        $spread = $maxScore - $minScore
-        Write-Host "Strong-match scores: $($strongMatchScores -join ', '); spread = $spread point(s)."
-
-        if ($spread -gt $ScoreTolerance) {
-            $allIssues.Add("SCORE_VARIANCE: repeated identical strong-match vacancy varied by $spread points; allowed spread is $ScoreTolerance.")
-        } else {
-            Write-Host "Score stability: PASS (spread within $ScoreTolerance points)." -ForegroundColor Green
+            if ($spread -gt $ScoreTolerance) {
+                $allIssues.Add("SCORE_VARIANCE: '$($stabilityCase.Name)' varied by $spread points; allowed spread is $ScoreTolerance.")
+            } else {
+                Write-Host "Score stability: PASS (spread within $ScoreTolerance points)." -ForegroundColor Green
+            }
         }
     }
 } elseif ($SkipScoreStability) {
