@@ -75,6 +75,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             - matchedRequirements: array of objects with "requirement" and "evidence"
             - gaps: array of objects with "requirement", "severity" ("Must-have", "Preferred", or "Unknown"), "status" ("Unverified" or "Unmet"), and "explanation"
             - questionsToVerify: array of questions the candidate should resolve before applying
+
+            Use status "Unmet" only when the candidate profile explicitly conflicts with the vacancy, such as a stated B1 level for a mandatory C2 requirement. Use "Unverified" when the information is missing or a placeholder. The job ad is never evidence that the candidate meets a requirement.
             - rationale: explain the recommendation with concrete evidence from the profile
 
             Be concise and specific. Mention important skill matches and gaps. Do not treat a skill as
