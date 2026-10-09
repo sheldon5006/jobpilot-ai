@@ -1,8 +1,11 @@
 {
   "manifest_version": 3,
   "name": "DBot — Job Assistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Evaluate job descriptions against your profile and prepare tailored applications.",
+  "host_permissions": [
+    "http://127.0.0.1:5080/*"
+  ],
   "action": {
     "default_title": "Open DBot Job Assistant",
     "default_popup": "popup.html"
