@@ -88,11 +88,19 @@ public static class JobRequirementRuleEngine
 
         var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
         return string.Join(" ", sentences.Where(sentence =>
-            !(EmploymentMetadataGap.IsMatch(sentence) &&
-              Regex.IsMatch(
-                  sentence,
-                  @"\b(?:unknown|unverified|placeholder|gap|verify|verified|missing|not specified)\b",
-                  RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))).Trim();
+        {
+            var mentionsDatesOrDuration = EmploymentMetadataGap.IsMatch(sentence) ||
+                Regex.IsMatch(
+                    sentence,
+                    @"\b(?:dates?|duration)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var indicatesUnknown = Regex.IsMatch(
+                sentence,
+                @"\b(?:unknown|unverified|placeholder|gap|verify|verified|missing|not specified)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+            return !(mentionsDatesOrDuration && indicatesUnknown);
+        })).Trim();
     }
 
     private static void ApplyLanguage(
