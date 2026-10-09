@@ -138,10 +138,11 @@ function inferExplicitRequirements(description: string): string[] {
   }
 
   if (/\b(?:vor ort|on.?site|in the office|im büro|im buero|design-office)\b/i.test(text)) {
+    const officeHours = /\b10[:.]00\b/i.test(text) && /\b17[:.]30\b/i.test(text);
     if (/\b(?:köln|cologne)\b/i.test(text)) {
-      inferred.push(twoOrThreeDays
-        ? "Available to work on-site in Cologne 2–3 weekdays"
-        : "Available to work on-site in Cologne");
+      const schedule = twoOrThreeDays ? " 2–3 days/week" : "";
+      const hours = officeHours ? " (10:00–17:30)" : "";
+      inferred.push("Available on-site in Cologne" + schedule + hours);
     } else {
       inferred.push("Available for on-site work");
     }
@@ -153,11 +154,23 @@ function inferExplicitRequirements(description: string): string[] {
   if (/\bteamarbeit\b|\bteamwork\b|\bkommunikationsfähigkeiten\b|\bkommunikationsfähigkeit\b|\bcommunication skills\b/i.test(text)) {
     inferred.push("Teamwork and strong communication");
   }
-  if (/\b(?:mobile trends|mobile apps|new apps|neue apps|technische geräte|technische geräte|technical devices|technical equipment)\b/i.test(text)) {
+  if (/\b(?:mobile trends|mobile apps|new apps|neue apps|technische geräte|technischen geräten|technical devices|technical equipment)\b/i.test(text)) {
     inferred.push("Interest in apps/mobile technology and confidence with devices");
   }
 
   return inferred;
+}
+
+function requirementCategory(value: string): string | undefined {
+  const text = value.toLocaleLowerCase();
+  if (/\b(?:german|deutsch|english|englisch|language skills?|sprachkenntnisse)\b/i.test(text)) return "language";
+  if (/\b(?:enrolled|enrolment|enrollment|university|immatrikuliert|eingeschrieben|student status)\b/i.test(text)) return "enrollment";
+  if (/\b(?:14\s*[-–]\s*20|hours per week|weekly hours|days per week|weekdays|stunden pro woche)\b/i.test(text)) return "availability";
+  if (/\b(?:on.?site|cologne|köln|vor ort|design.office|office attendance)\b/i.test(text)) return "location";
+  if (/\b(?:careful|sorgfältig|structured|strukturiert)\b/i.test(text)) return "work-style";
+  if (/\b(?:teamwork|teamarbeit|communication|kommunikation)\b/i.test(text)) return "teamwork";
+  if (/\b(?:mobile|app|device|geräte|geräten|technolog)\b/i.test(text)) return "technology";
+  return undefined;
 }
 
 function renderKeyRequirements(result: JobAnalysisResult): void {
@@ -177,12 +190,15 @@ function renderKeyRequirements(result: JobAnalysisResult): void {
   ];
 
   const seen = new Set<string>();
+  const seenCategories = new Set<string>();
   const requirements: string[] = [];
   for (const candidate of candidates) {
     const requirement = normalizeRequirement(candidate);
     const key = requirement.toLocaleLowerCase();
-    if (!requirement || seen.has(key)) continue;
+    const category = requirementCategory(requirement);
+    if (!requirement || seen.has(key) || (category && seenCategories.has(category))) continue;
     seen.add(key);
+    if (category) seenCategories.add(category);
     requirements.push(requirement);
     if (requirements.length >= 6) break;
   }
@@ -213,11 +229,14 @@ function renderCandidateExpectations(result: JobAnalysisResult): void {
   const candidates = [...inferred.slice(0, 4), ...fromModel, ...inferred.slice(4)];
   const expectations: string[] = [];
   const seen = new Set<string>();
+  const seenCategories = new Set<string>();
   for (const candidate of candidates) {
     const value = normalizeRequirement(candidate);
     const key = value.toLocaleLowerCase();
-    if (!value || seen.has(key)) continue;
+    const category = requirementCategory(value);
+    if (!value || seen.has(key) || (category && seenCategories.has(category))) continue;
     seen.add(key);
+    if (category) seenCategories.add(category);
     expectations.push(value);
     if (expectations.length >= 5) break;
   }
