@@ -280,8 +280,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "DBOT_FETCH_CURRENT_PAGE") {
     (async () => {
-      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (!tab?.id || !tab.url || !/^https?:\/\//i.test(tab.url)) {
+      // The side panel supplies the active tab ID from its own browser window.
+      // A service worker's lastFocusedWindow query can point at a different
+      // window (or return no tab), so don't guess which page the user meant.
+      const requestedTabId = Number.isInteger(message.tabId) ? message.tabId : undefined;
+      if (requestedTabId === undefined) {
+        sendResponse({
+          ok: false,
+          error: "DBot could not identify the active tab. Close and reopen the side panel, then try fetching again."
+        });
+        return;
+      }
+
+      const tab = await chrome.tabs.get(requestedTabId);
+      const isHttpPage = typeof tab.url === "string"
+        && (tab.url.startsWith("http://") || tab.url.startsWith("https://"));
+      if (tab.id === undefined || !isHttpPage) {
         sendResponse({
           ok: false,
           error: "Open a normal http/https job webpage before fetching details."
