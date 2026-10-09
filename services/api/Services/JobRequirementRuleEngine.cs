@@ -888,9 +888,10 @@ public static class JobRequirementRuleEngine
         {
             if (explicitLearningMismatch || knownBelowLevel)
             {
-                AddGap(
+                AddLanguageGap(
                     result,
                     language,
+                    GetRequiredLevelLabel(nearbyText),
                     "Must-have",
                     "Unmet",
                     $"{language} proficiency does not meet the vacancy's explicitly stated {GetRequiredLevelLabel(nearbyText) ?? "mandatory"} requirement based on the candidate profile.");
@@ -904,9 +905,10 @@ public static class JobRequirementRuleEngine
 
             if (isUnknown || learning || (requiredLevel.HasValue && !profileLevel.HasValue))
             {
-                AddGap(
+                AddLanguageGap(
                     result,
                     language,
+                    GetRequiredLevelLabel(nearbyText),
                     "Must-have",
                     "Unverified",
                     $"The vacancy makes {language} a mandatory requirement, but the candidate profile does not establish a verified proficiency level.");
@@ -1037,21 +1039,32 @@ public static class JobRequirementRuleEngine
             question.Contains(alternateName, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void AddGap(
+    private static void AddLanguageGap(
         JobAnalysisResult result,
         string language,
+        string? requiredLevel,
         string severity,
         string status,
         string explanation)
     {
         result.Gaps.Add(new RequirementGap
         {
-            Requirement = $"{language} proficiency",
+            Requirement = requiredLevel is null
+                ? $"{language} proficiency"
+                : $"{language} proficiency ({requiredLevel})",
             Severity = severity,
             Status = status,
             Explanation = explanation
         });
     }
+
+    private static void AddGap(
+        JobAnalysisResult result,
+        string language,
+        string severity,
+        string status,
+        string explanation) =>
+        AddLanguageGap(result, language, requiredLevel: null, severity, status, explanation);
 
     private static void RemoveLanguageNarrative(
         JobAnalysisResult result,
