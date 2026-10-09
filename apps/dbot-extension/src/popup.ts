@@ -522,7 +522,7 @@ chrome.runtime.onMessage.addListener((message: { type: string; tabId?: number; m
   }
 
   if (message.type === "DBOT_JOB_DETAILS_DETECTED") {
-    void chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.id !== message.tabId) return;
       if (!message.job) return;
       void applyDetectedJob(message.job, Boolean(message.autoAnalyze), message.source || "auto");
