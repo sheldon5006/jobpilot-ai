@@ -20,6 +20,7 @@ public sealed class JobAnalysisResult
     public string Rationale { get; set; } = string.Empty;
     public string MandatoryRequirementsStatus { get; set; } = "Unknown";
     public List<string> EvidenceValidationWarnings { get; set; } = [];
+    public List<string> RequirementValidationWarnings { get; set; } = [];
 
     // DBot provides decision support only; it never submits an application.
     public bool RequiresHumanReview { get; set; } = true;
