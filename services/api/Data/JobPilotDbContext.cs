@@ -7,6 +7,7 @@ public sealed class JobPilotDbContext(DbContextOptions<JobPilotDbContext> option
     : DbContext(options)
 {
     public DbSet<SavedJob> SavedJobs => Set<SavedJob>();
+    public DbSet<CandidateProfileDocument> CandidateProfiles => Set<CandidateProfileDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,7 +22,16 @@ public sealed class JobPilotDbContext(DbContextOptions<JobPilotDbContext> option
         job.Property(item => item.DetectedLanguage).HasMaxLength(80);
         job.Property(item => item.AnalysisJson).IsRequired();
         job.Property(item => item.JobDescription).IsRequired();
+        job.Property(item => item.CvFileName).HasMaxLength(255);
+        job.Property(item => item.CvContentType).HasMaxLength(160);
         job.HasIndex(item => item.CreatedAtUtc);
         job.HasIndex(item => item.ApplicationStatus);
+
+        var profile = modelBuilder.Entity<CandidateProfileDocument>();
+        profile.ToTable("CandidateProfiles");
+        profile.HasKey(item => item.Id);
+        profile.Property(item => item.Id).HasMaxLength(32).IsRequired();
+        profile.Property(item => item.ProfileJson).IsRequired();
+        profile.Property(item => item.UpdatedAtUtc).IsRequired();
     }
 }
