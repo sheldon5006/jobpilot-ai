@@ -321,7 +321,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             return text;
         }
 
-        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
         var retained = sentences.Where(sentence =>
         {
             if (!sentence.Contains("English", StringComparison.OrdinalIgnoreCase))
@@ -331,11 +331,11 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
 
             var claimsPositiveProficiency = Regex.IsMatch(
                 sentence,
-                @"\\b(confirmed|verified|proficient|fluent|demonstrates?|meets?|matches?|matched|satisfies|sufficient)\\b",
+                @"\b(confirmed|verified|proficient|fluent|demonstrates?|meets?|matches?|matched|satisfies|sufficient)\b",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             var explicitlyAcknowledgesUncertainty = Regex.IsMatch(
                 sentence,
-                @"\\b(not|no|unknown|unverified|unconfirmed|missing|gap|confirm|verify)\\b",
+                @"\b(not|no|unknown|unverified|unconfirmed|missing|gap|confirm|verify)\b",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
             return !(claimsPositiveProficiency && !explicitlyAcknowledgesUncertainty);
