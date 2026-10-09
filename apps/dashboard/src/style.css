@@ -261,3 +261,5 @@ input:focus, textarea:focus, select:focus { border-color: #6481ee; box-shadow: 0
   .cv-actions { flex-direction: column; }
   .cv-actions .button { width: 100%; }
 }
+
+.cv-attached-tag { padding: 4px 6px; border-radius: 5px; color: #23744e; background: #e8f8ef; font-size: 8px; font-weight: 800; }
