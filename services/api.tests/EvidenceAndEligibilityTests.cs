@@ -112,6 +112,62 @@ public sealed class EvidenceAndEligibilityTests
     }
 
     [Fact]
+    public void GermanProficiencyGapPreservesVacancyCeFRLevel()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "German language skills at CEFR C2 are mandatory for this position."
+        };
+        var result = new JobAnalysisResult
+        {
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "German proficiency (C2)",
+                    Severity = "Must-have",
+                    Status = "Unmet",
+                    Explanation = "The profile does not establish C2."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Single(result.Gaps);
+        Assert.Empty(result.RequirementValidationWarnings);
+    }
+
+    [Fact]
+    public void GermanProficiencyParaphraseMatchesVacancyLanguageSkillsWording()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = "Full-Stack Developer",
+            JobDescription = "German language skills are preferred but not mandatory."
+        };
+        var result = new JobAnalysisResult
+        {
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "German proficiency",
+                    Severity = "Preferred",
+                    Status = "Unmet",
+                    Explanation = "German is preferred."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Single(result.Gaps);
+        Assert.Empty(result.RequirementValidationWarnings);
+    }
+
+    [Fact]
     public void AuthorizationRequirementMatchesEquivalentRightToWorkWording()
     {
         var request = new JobAnalysisRequest
