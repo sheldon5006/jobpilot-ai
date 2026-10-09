@@ -214,6 +214,36 @@ public sealed class EvidenceAndEligibilityTests
     }
 
     [Fact]
+    public void StrongVerifiedMatchOverridesInconsistentModelSkip()
+    {
+        var result = new JobAnalysisResult
+        {
+            Recommendation = "Skip",
+            MatchScore = 90
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal("Apply", result.Recommendation);
+        Assert.Equal("No unresolved mandatory gaps", result.MandatoryRequirementsStatus);
+    }
+
+    [Fact]
+    public void BelowThresholdMatchCannotRemainApply()
+    {
+        var result = new JobAnalysisResult
+        {
+            Recommendation = "Apply",
+            MatchScore = 75
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal("Review", result.Recommendation);
+        Assert.Equal("No unresolved mandatory gaps", result.MandatoryRequirementsStatus);
+    }
+
+    [Fact]
     public void UnverifiedMandatoryRequirementProducesReviewStatus()
     {
         var result = new JobAnalysisResult
