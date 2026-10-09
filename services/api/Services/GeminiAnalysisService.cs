@@ -102,13 +102,10 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             }
         };
 
-        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint);
-        message.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
-        message.Content = JsonContent.Create(payload, options: JsonOptions);
-
-        using var response = await httpClient.SendAsync(
-            message,
-            HttpCompletionOption.ResponseHeadersRead,
+        using var response = await SendWithRetriesAsync(
+            endpoint,
+            apiKey,
+            payload,
             cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -120,9 +117,12 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new GeminiApiException(
-                $"Gemini returned HTTP {(int)response.StatusCode}. Check the model name, API key, and current free-tier availability.",
-                (int)response.StatusCode);
+            var providerMessage = await TryReadProviderErrorMessageAsync(response, cancellationToken);
+            var detail = string.IsNullOrWhiteSpace(providerMessage)
+                ? $"Gemini returned HTTP {(int)response.StatusCode} after limited retries. This may be a temporary provider issue; try again later."
+                : $"Gemini returned HTTP {(int)response.StatusCode}: {providerMessage}";
+
+            throw new GeminiApiException(detail, (int)response.StatusCode);
         }
 
         using var responseJson = await JsonDocument.ParseAsync(
@@ -196,6 +196,77 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
         return result;
     }
+    private async Task<HttpResponseMessage> SendWithRetriesAsync(
+        string endpoint,
+        string apiKey,
+        object payload,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            message.Headers.TryAddWithoutValidation("x-goog-api-key", apiKey);
+            message.Content = JsonContent.Create(payload, options: JsonOptions);
+
+            var response = await httpClient.SendAsync(
+                message,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+            var isTransient = response.StatusCode == HttpStatusCode.RequestTimeout ||
+                              (int)response.StatusCode >= 500;
+
+            if (!isTransient || attempt == maxAttempts)
+            {
+                return response;
+            }
+
+            response.Dispose();
+
+            // Exponential backoff (1s, 2s) plus small jitter; do not spin indefinitely.
+            var baseDelaySeconds = Math.Pow(2, attempt - 1);
+            var jitterMilliseconds = Random.Shared.Next(0, 251);
+            var delay = TimeSpan.FromSeconds(baseDelaySeconds) +
+                        TimeSpan.FromMilliseconds(jitterMilliseconds);
+
+            await Task.Delay(delay, cancellationToken);
+        }
+
+        throw new InvalidOperationException("Gemini request retry loop ended unexpectedly.");
+    }
+
+    private static async Task<string?> TryReadProviderErrorMessageAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(
+                stream,
+                cancellationToken: cancellationToken);
+
+            if (document.RootElement.TryGetProperty("error", out var error) &&
+                error.TryGetProperty("message", out var message))
+            {
+                return message.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Do not return arbitrary proxy or HTML error bodies to the client.
+        }
+        catch (IOException)
+        {
+            // The status code remains useful even if the error body cannot be read.
+        }
+
+        return null;
+    }
+
+
 }
 
 public sealed class GeminiApiException(string message, int statusCode) : Exception(message)
