@@ -131,6 +131,8 @@ By default, it makes two extra calls for each of the first three scenarios to ch
 
 The local candidate profile supports `workAuthorization` (an accurate, country-specific right-to-work/sponsorship statement) and `certifications` (exact credentials and validity details). Leave either unknown until you can verify it; never invent these values.
 
+The regression script retries HTTP 502/503/504 responses twice by default (three total attempts) with short backoff delays. Use `-TransientRetries 0` to disable these extra attempts or set `-TransientRetries 3` for up to three retries. Repeated failures are still reported as test failures.
+
 The quality checks are development guardrails for these controlled scenarios, not proof of accuracy across all vacancies. The script reads the ignored local `candidate-profile.json`; do not commit that file or paste personal data into issues.
 
 ## Current boundaries
