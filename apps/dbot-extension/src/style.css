@@ -374,6 +374,25 @@ textarea:focus {
   margin: 0;
 }
 
+.result-list li p.evidence-source {
+  margin-top: 5px;
+  color: #68758b;
+  font-size: 9px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.mandatory-status-section {
+  padding: 9px 10px;
+  border: 1px solid #d9e4fb;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.mandatory-status-section h3 {
+  margin-bottom: 4px;
+}
+
 .gap-severity {
   display: inline-block;
   margin: 0 0 4px;
