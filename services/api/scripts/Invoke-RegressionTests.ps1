@@ -357,6 +357,10 @@ function Get-QualityIssues {
     $issues = [System.Collections.Generic.List[string]]::new()
     $vacancy = [string]$Case.JobTitle + [Environment]::NewLine + [string]$Case.JobDescription
 
+    if ([string]$Result.mandatoryRequirementsStatus -notin @("Not met", "Needs verification", "No unresolved mandatory gaps")) {
+        $issues.Add("MISSING_MANDATORY_STATUS: API did not return a recognised mandatory-requirements status.")
+    }
+
     # Controlled scenarios permit only a narrowly-scoped question when a mandatory
     # eligibility fact is intentionally absent from the profile.
     foreach ($question in @($Result.questionsToVerify)) {
@@ -429,6 +433,7 @@ function Test-ExpectedScenario {
         "1 - Strong technical match" {
             return (
                 $Result.recommendation -eq "Apply" -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
                 $gaps.Count -eq 0 -and
                 $questions.Count -eq 0
             )
@@ -438,6 +443,7 @@ function Test-ExpectedScenario {
             $otherGaps = @($gaps | Where-Object { $_.requirement -notmatch "German|Deutsch" })
             return (
                 $Result.recommendation -eq "Apply" -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
                 $germanGaps.Count -eq 1 -and
                 $germanGaps[0].severity -eq "Preferred" -and
                 $otherGaps.Count -eq 0 -and
@@ -451,6 +457,7 @@ function Test-ExpectedScenario {
                 $germanGaps.Count -eq 1 -and
                 $germanGaps[0].severity -eq "Must-have" -and
                 $germanGaps[0].status -eq "Unmet" -and
+                $Result.mandatoryRequirementsStatus -eq "Not met" -and
                 $questions.Count -eq 0
             )
         }
@@ -471,6 +478,7 @@ function Test-ExpectedScenario {
                     $authGaps.Count -eq 1 -and
                     $authGaps[0].severity -eq "Must-have" -and
                     $authGaps[0].status -eq "Unverified" -and
+                    $Result.mandatoryRequirementsStatus -eq "Needs verification" -and
                     $questions.Count -eq 1
                 )
             }
@@ -481,6 +489,7 @@ function Test-ExpectedScenario {
                     $authGaps.Count -eq 1 -and
                     $authGaps[0].severity -eq "Must-have" -and
                     $authGaps[0].status -eq "Unmet" -and
+                    $Result.mandatoryRequirementsStatus -eq "Not met" -and
                     $questions.Count -eq 0
                 )
             }
@@ -489,6 +498,7 @@ function Test-ExpectedScenario {
                 $authPositive -and
                 $Result.recommendation -eq "Apply" -and
                 $authGaps.Count -eq 0 -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
                 $questions.Count -eq 0
             )
         }
@@ -500,6 +510,7 @@ function Test-ExpectedScenario {
                 return (
                     $Result.recommendation -eq "Apply" -and
                     $awsGaps.Count -eq 0 -and
+                    $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
                     $questions.Count -eq 0
                 )
             }
@@ -509,6 +520,7 @@ function Test-ExpectedScenario {
                 $awsGaps.Count -eq 1 -and
                 $awsGaps[0].severity -eq "Must-have" -and
                 $awsGaps[0].status -eq "Unverified" -and
+                $Result.mandatoryRequirementsStatus -eq "Needs verification" -and
                 $questions.Count -eq 1
             )
         }
@@ -524,6 +536,7 @@ function Test-ExpectedScenario {
                 return (
                     $Result.recommendation -eq "Apply" -and
                     $studentGaps.Count -eq 0 -and
+                    $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
                     $questions.Count -eq 0
                 )
             }
@@ -534,6 +547,7 @@ function Test-ExpectedScenario {
                     $studentGaps.Count -eq 1 -and
                     $studentGaps[0].severity -eq "Must-have" -and
                     $studentGaps[0].status -eq "Unmet" -and
+                    $Result.mandatoryRequirementsStatus -eq "Not met" -and
                     $questions.Count -eq 0
                 )
             }
@@ -543,6 +557,7 @@ function Test-ExpectedScenario {
                 $studentGaps.Count -eq 1 -and
                 $studentGaps[0].severity -eq "Must-have" -and
                 $studentGaps[0].status -eq "Unverified" -and
+                $Result.mandatoryRequirementsStatus -eq "Needs verification" -and
                 $questions.Count -eq 1
             )
         }
@@ -559,10 +574,10 @@ function Test-ExpectedScenario {
             if ($experienceGaps.Count -eq 1) {
                 if ($experienceGaps[0].severity -ne "Must-have") { return $false }
                 if ($experienceGaps[0].status -eq "Unmet") {
-                    return $Result.recommendation -eq "Skip" -and $questions.Count -eq 0
+                    return $Result.recommendation -eq "Skip" -and $Result.mandatoryRequirementsStatus -eq "Not met" -and $questions.Count -eq 0
                 }
                 if ($experienceGaps[0].status -eq "Unverified") {
-                    return $Result.recommendation -eq "Review" -and $questions.Count -eq 1
+                    return $Result.recommendation -eq "Review" -and $Result.mandatoryRequirementsStatus -eq "Needs verification" -and $questions.Count -eq 1
                 }
                 return $false
             }
@@ -571,6 +586,7 @@ function Test-ExpectedScenario {
                 $experienceGaps.Count -eq 0 -and
                 $experienceMatches.Count -eq 1 -and
                 $Result.recommendation -eq "Apply" -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
                 $questions.Count -eq 0
             )
         }
