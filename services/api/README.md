@@ -20,16 +20,23 @@ Edit `candidate-profile.json` with your accurate experience, dates, qualificatio
 
 The API reads it from the API content directory by default. Override the path with `DBOT_PROFILE_PATH` if needed.
 
-## 2. Configure the Gemini key locally
+## 2. Configure the Gemini key in a local file
 
-In the same PowerShell session, set your API key as an environment variable (replace the placeholder locally; do not commit it):
+1. From this directory, copy the example configuration:
 
 ```powershell
-$env:GEMINI_API_KEY = "PASTE_YOUR_KEY_HERE"
-$env:GEMINI_MODEL = "gemini-3.8-flash"
+Copy-Item .\appsettings.Local.example.json .\appsettings.Local.json
 ```
 
-The default model is `gemini-3.8-flash`. You can change `GEMINI_MODEL` to another model that is available to your API key and free tier. The API does not fall back to paid use automatically.
+2. Open `appsettings.Local.json` in your editor and replace `PASTE_YOUR_NEW_GEMINI_API_KEY_HERE` with your new key. Set the model to `gemini-3.8-flash` (or another model currently available to your API project).
+
+```powershell
+notepad .\appsettings.Local.json
+```
+
+The API explicitly loads `appsettings.Local.json` at startup. The file is ignored by Git; the tracked example contains only a placeholder. Do not copy a real key into the example file, commit it, share it, or publish it. This is plain-text local development storage, not encryption; anyone with access to your Windows account and file can read it. The API also continues to support `GEMINI_API_KEY` and `GEMINI_MODEL` environment variables as fallbacks.
+
+The API does not fall back to paid use automatically.
 
 **Free-tier privacy note:** Google's Gemini API pricing page states that free-tier content may be used to improve its products. DBot sends the job description and candidate profile only when you explicitly click Analyze. Keep personal identifiers such as phone number, home address and email out of the analysis profile unless you have a clear reason to send them.
 
