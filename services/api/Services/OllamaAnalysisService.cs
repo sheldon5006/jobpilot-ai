@@ -211,10 +211,6 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
         // Reconcile model output with language requirements explicitly stated in the vacancy.
         JobRequirementRuleEngine.Apply(request, profile, result);
 
-        var hasMustHaveGap = result.Gaps.Any(g =>
-            g is not null &&
-            string.Equals(g.Severity, "Must-have", StringComparison.OrdinalIgnoreCase));
-
         JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
