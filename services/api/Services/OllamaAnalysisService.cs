@@ -215,32 +215,12 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             g is not null &&
             string.Equals(g.Severity, "Must-have", StringComparison.OrdinalIgnoreCase));
 
-        // Only a confirmed must-have gap blocks Apply. Generic questions should not.
-        if (result.Recommendation == "Apply" && hasMustHaveGap)
-        {
-            result.Recommendation = "Review";
-            result.Rationale = AppendOnce(
-                result.Rationale,
-                "DBot changed the recommendation to Review because at least one mandatory requirement remains unverified.");
-        }
-
         JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
         return result;
     }
 
-    private static string AppendOnce(string existing, string addition)
-    {
-        if (existing.Contains(addition, StringComparison.OrdinalIgnoreCase))
-        {
-            return existing;
-        }
-
-        return string.IsNullOrWhiteSpace(existing)
-            ? addition
-            : $"{existing.TrimEnd()} {addition}";
-    }
 
 }
 
