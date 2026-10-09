@@ -107,6 +107,20 @@ $body = @{
 Invoke-RestMethod -Uri http://127.0.0.1:5080/api/jobs/analyze -Method Post -ContentType "application/json" -Body $body
 ```
 
+## Regression testing
+
+Start the API locally and configure the provider you want to evaluate in `appsettings.Local.json`. Then run the reusable regression script from the repository root:
+
+```powershell
+.\services\api\scripts\Invoke-RegressionTests.ps1
+```
+
+The script tests a strong technical match, a preferred German requirement, and an unmet mandatory German C2 requirement. It checks recommendation and gap behaviour, flags unsupported follow-up questions, verifies that matched requirements appear in the vacancy, checks that each evidence item is a meaningful statement anchored in the local candidate profile, and validates the score-calibration explanation.
+
+By default, it makes two extra calls for the same strong-match vacancy to detect score variation. It fails the score-stability check when the repeated scores differ by more than 10 points. Skip the extra calls with `-SkipScoreStability`, or choose another tolerance with `-ScoreTolerance 15`.
+
+The quality checks are development guardrails for these controlled scenarios, not proof of accuracy across all vacancies. The script reads the ignored local `candidate-profile.json`; do not commit that file or paste personal data into issues.
+
 ## Current boundaries
 
 - Job descriptions and candidate profile are not stored by this API.
