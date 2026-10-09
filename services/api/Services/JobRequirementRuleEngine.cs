@@ -171,7 +171,7 @@ public static class JobRequirementRuleEngine
     private static string GetLanguageContext(string text, string language, string alternateName)
     {
         // Split clauses so a preference for German cannot accidentally classify English as preferred.
-        var clauses = text.Split(['.', ';', '!', '?', '\\r', '\\n'],
+        var clauses = text.Split(['.', ';', '!', '?', '\r', '\n'],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         return string.Join(" ", clauses.Where(clause =>
@@ -270,7 +270,7 @@ public static class JobRequirementRuleEngine
             return string.Empty;
         }
 
-        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
         return string.Join(" ", sentences.Where(sentence =>
             !ContainsWord(sentence, language) && !ContainsWord(sentence, alternateName))).Trim();
     }
