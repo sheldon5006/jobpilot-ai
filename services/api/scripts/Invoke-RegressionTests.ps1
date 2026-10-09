@@ -120,7 +120,7 @@ function Test-EvidenceGroundedInProfile {
     # every paraphrase to match one long source sentence word-for-word.
     $genericEvidenceWords = @(
         "professional", "practical", "relevant", "commercial", "work", "working",
-        "experience", "experienced", "using", "knowledge", "demonstrated", "hands",
+        "experience", "experienced", "using", "knowledge", "demonstrated", "hand",
         "develop", "development", "developing", "developed", "develops",
         "utilize", "utilized", "utilizing", "utilizes", "candidate"
     )
