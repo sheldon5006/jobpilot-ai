@@ -369,7 +369,7 @@ function Invoke-JobAnalysis {
             $statusCode = Get-ApiHttpStatusCode -ErrorRecord $_
             $lastStatusCode = $statusCode
 
-            if ($statusCode -in @(502, 503, 504) -and $attempt -lt $maxAttempts) {
+            if ($statusCode -ge 500 -and $statusCode -lt 600 -and $attempt -lt $maxAttempts) {
                 $delaySeconds = [math]::Pow(2, $attempt - 1)
                 Write-Host "Transient HTTP $statusCode for '$($Case.Name)'. Retrying in $delaySeconds second(s) ($attempt/$($maxAttempts - 1))..." -ForegroundColor DarkYellow
                 Start-Sleep -Seconds $delaySeconds
@@ -665,17 +665,18 @@ foreach ($case in $cases) {
 
     $call = Invoke-JobAnalysis -Case $case
     if (-not $call.Success) {
-        if ($call.StatusCode -eq 429) {
+        if ($call.StatusCode -eq 429 -or ($call.StatusCode -ge 500 -and $call.StatusCode -lt 600)) {
+            $providerStatus = if ($call.StatusCode -eq 429) { "rate limit (HTTP 429)" } else { "transient provider/connectivity failure (HTTP $($call.StatusCode))" }
             $summary.Add([pscustomobject]@{
                 Test = $case.Name
-                Status = "THROTTLED"
+                Status = "INCONCLUSIVE"
                 Recommendation = ""
                 Score = $null
                 Gaps = $null
                 Seconds = $call.Seconds
             })
-            $inconclusiveIssues.Add("$($case.Name): Gemini rate limit (HTTP 429); scenario result could not be evaluated.")
-            Write-Host "Gemini rate limit reached (HTTP 429); this scenario is inconclusive, not a rule failure." -ForegroundColor Yellow
+            $inconclusiveIssues.Add("$($case.Name): $providerStatus; scenario could not be evaluated. Detail: $($call.Error)")
+            Write-Host "$providerStatus; this scenario is inconclusive, not a rule failure. Detail: $($call.Error)" -ForegroundColor Yellow
         } else {
             $summary.Add([pscustomobject]@{
                 Test = $case.Name
@@ -739,9 +740,9 @@ if (-not $SkipScoreStability -and $coreScenariosReady) {
         for ($repeat = 2; $repeat -le 3; $repeat++) {
             $call = Invoke-JobAnalysis -Case $stabilityCase
             if (-not $call.Success) {
-                if ($call.StatusCode -eq 429) {
-                    $inconclusiveIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat was skipped because Gemini returned HTTP 429.")
-                    Write-Host "Repeat $repeat inconclusive: Gemini rate limit (HTTP 429)." -ForegroundColor Yellow
+                if ($call.StatusCode -eq 429 -or ($call.StatusCode -ge 500 -and $call.StatusCode -lt 600)) {
+                    $inconclusiveIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat was inconclusive after provider/connectivity HTTP $($call.StatusCode). Detail: $($call.Error)")
+                    Write-Host "Repeat $repeat inconclusive after HTTP $($call.StatusCode): $($call.Error)" -ForegroundColor Yellow
                 } else {
                     $allIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat failed after $($call.Seconds)s - $($call.Error)")
                     Write-Host "Repeat $repeat failed: $($call.Error)" -ForegroundColor Red
