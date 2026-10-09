@@ -198,6 +198,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
 
         var candidate = candidates[0];
         if (candidate.TryGetProperty("finishReason", out var finishReasonElement) &&
+            finishReasonElement.ValueKind == JsonValueKind.String &&
             string.Equals(finishReasonElement.GetString(), "MAX_TOKENS", StringComparison.OrdinalIgnoreCase))
         {
             throw new GeminiApiException(
