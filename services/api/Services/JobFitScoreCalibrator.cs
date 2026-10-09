@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using JobPilot.Api.Models;
 
 namespace JobPilot.Api.Services;
@@ -106,13 +107,15 @@ public static class JobFitScoreCalibrator
 
         if (explicitlyUnmetMandatory)
         {
-            if (!string.Equals(result.Recommendation, "Skip", StringComparison.OrdinalIgnoreCase))
-            {
-                result.Recommendation = "Skip";
-                result.Rationale = AppendOnce(
-                    result.Rationale,
-                    "Recommendation set to Skip because the candidate profile explicitly conflicts with a mandatory requirement in the vacancy.");
-            }
+            // Remove model-generated wording that treats an explicitly unmet requirement
+            // as merely unknown or something that can be cleared up with a question.
+            result.Summary = RemoveUnmetContradictions(result.Summary);
+            result.Rationale = RemoveUnmetContradictions(result.Rationale);
+
+            result.Recommendation = "Skip";
+            result.Rationale = AppendOnce(
+                result.Rationale,
+                "Recommendation set to Skip because the candidate profile explicitly conflicts with a mandatory requirement in the vacancy.");
 
             return;
         }
@@ -143,6 +146,23 @@ public static class JobFitScoreCalibrator
                 result.Rationale,
                 "Recommendation set to Apply because no mandatory gaps remain; any remaining gaps are preferred rather than required.");
         }
+    }
+
+    private static string RemoveUnmetContradictions(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
+        var retained = sentences.Where(sentence =>
+            !Regex.IsMatch(
+                sentence,
+                @"\b(can|could|may)\s+be\s+verified\b|\bneed(s)?\s+to\s+be\s+verified\b|\bneeds?\s+verification\b|\bcan\s+be\s+cleared\s+up\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+
+        return string.Join(" ", retained).Trim();
     }
 
     private static int GetPenalty(RequirementGap gap)
