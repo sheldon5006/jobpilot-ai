@@ -52,27 +52,16 @@ public static class JobFitScoreCalibrator
         var uncappedTotal = mustHavePenalty + preferredPenalty + unknownSeverityPenalty;
         var totalPenalty = Math.Min(uncappedTotal, MaxTotalPenalty);
         var normalCalibratedScore = Math.Clamp(modelScore - totalPenalty, 0, 100);
-        var explicitlyUnmetMustHaveCount = distinctGaps.Count(gap =>
-            IsSeverity(gap, "Must-have") && IsStatus(gap, "Unmet"));
-
-        // A confirmed non-negotiable mismatch is a hard eligibility gate. Normalising the
-        // score prevents the LLM's varying initial estimate from making the same disqualifier
-        // appear as 0 in one run and 30 in another. This is still a fit heuristic, not a probability.
-        int? hardGateScore = explicitlyUnmetMustHaveCount switch
-        {
-            0 => null,
-            1 => 20,
-            2 => 10,
-            _ => 0
-        };
-        result.MatchScore = hardGateScore ?? normalCalibratedScore;
+        result.MatchScore = normalCalibratedScore;
+        result.MandatoryRequirementsStatus = distinctGaps.Any(gap =>
+                IsSeverity(gap, "Must-have") && IsStatus(gap, "Unmet"))
+            ? "Not met"
+            : distinctGaps.Any(gap =>
+                IsSeverity(gap, "Must-have") && !IsStatus(gap, "Unmet"))
+                ? "Needs verification"
+                : "No unresolved mandatory gaps";
 
         var adjustments = new List<string>();
-        if (hardGateScore.HasValue)
-        {
-            adjustments.Add(
-                $"{explicitlyUnmetMustHaveCount} explicitly unmet mandatory requirement(s): hard-gate score normalised to {hardGateScore.Value}/100");
-        }
         if (rawMustHavePenalty > MaxMustHavePenalty)
         {
             adjustments.Add(
@@ -167,6 +156,16 @@ public static class JobFitScoreCalibrator
 
         // Do not let an obsolete Review recommendation caused only by a removed, irrelevant
         // language gap block a strong match. Preferred gaps alone do not require Review.
+        if (result.EvidenceValidationWarnings.Count > 0)
+        {
+            result.Recommendation = "Review";
+            result.Rationale = AppendOnce(
+                result.Rationale,
+                "Recommendation remains Review because one or more matched-requirement evidence references failed validation.");
+            return;
+        }
+
+        // Preferred gaps alone do not block Apply. Evidence-validation warnings above do.
         var hasOnlyNonBlockingGaps = gaps.All(gap => IsSeverity(gap, "Preferred"));
         if (result.Recommendation == "Review" &&
             result.MatchScore >= 80 &&
