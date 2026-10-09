@@ -73,6 +73,73 @@ public sealed class EvidenceAndEligibilityTests
     }
 
     [Fact]
+    public void UnsupportedRequirementsAreRemovedAndWarned()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "Build web applications using C#, ASP.NET Core, SQL Server, and Angular."
+        };
+        var result = new JobAnalysisResult
+        {
+            MatchedRequirements =
+            [
+                new MatchedRequirement
+                {
+                    Requirement = "Kubernetes and Angular",
+                    Evidence = "Angular",
+                    EvidenceIds = ["SKL-001"]
+                }
+            ],
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "German C2",
+                    Severity = "Must-have",
+                    Status = "Unmet",
+                    Explanation = "This requirement was never stated in the vacancy."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Empty(result.MatchedRequirements);
+        Assert.Empty(result.Gaps);
+        Assert.Equal(2, result.RequirementValidationWarnings.Count);
+        Assert.Equal("Review", result.Recommendation);
+    }
+
+    [Fact]
+    public void AuthorizationRequirementMatchesEquivalentRightToWorkWording()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "Applicants must already have the legal right to work in Germany. The employer cannot provide visa sponsorship."
+        };
+        var result = new JobAnalysisResult
+        {
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "work authorization",
+                    Severity = "Must-have",
+                    Status = "Unverified",
+                    Explanation = "The vacancy explicitly requires existing work eligibility."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Single(result.Gaps);
+        Assert.Empty(result.RequirementValidationWarnings);
+    }
+
+    [Fact]
     public void ProfessionalExperienceCannotBeProvenBySkillListAlone()
     {
         var profile = new CandidateProfile
