@@ -217,7 +217,7 @@ static async Task<IResult> AnalyzeJobAsync(
 
         return Results.Problem(
             title: "AI analysis timed out",
-            detail,
+            detail: detail,
             statusCode: StatusCodes.Status504GatewayTimeout);
     }
 }
