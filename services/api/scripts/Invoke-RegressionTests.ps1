@@ -369,7 +369,9 @@ function Invoke-JobAnalysis {
             $statusCode = Get-ApiHttpStatusCode -ErrorRecord $_
             $lastStatusCode = $statusCode
 
-            if ($statusCode -ge 500 -and $statusCode -lt 600 -and $attempt -lt $maxAttempts) {
+            $providerAlreadyRetried = $lastError -match '(?i)\b(?:Gemini|Ollama) returned HTTP\s+\d{3}\b'
+            if ($statusCode -ge 500 -and $statusCode -lt 600 -and
+                -not $providerAlreadyRetried -and $attempt -lt $maxAttempts) {
                 $delaySeconds = [math]::Pow(2, $attempt - 1)
                 Write-Host "Transient HTTP $statusCode for '$($Case.Name)'. Retrying in $delaySeconds second(s) ($attempt/$($maxAttempts - 1))..." -ForegroundColor DarkYellow
                 Start-Sleep -Seconds $delaySeconds
