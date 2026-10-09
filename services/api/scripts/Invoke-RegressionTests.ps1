@@ -344,7 +344,7 @@ function Test-ExpectedScenario {
         }
         "5 - Mandatory certification" {
             $certs = @($profile.certifications)
-            $hasAwsCredential = @($certs | Where-Object { [string]$_ -match "AWS\s+Certified\s+Developer(?:\s*[-–]\s*Associate)?" }).Count -gt 0
+            $hasAwsCredential = @($certs | Where-Object { [string]$_ -match "AWS\s+Certified\s+Developer" }).Count -gt 0
             $awsGaps = @($gaps | Where-Object { $_.requirement -match "AWS|certification|certificate" })
             if ($hasAwsCredential) {
                 return (
