@@ -183,6 +183,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             throw new OllamaApiException("Ollama returned an empty analysis.", (int)HttpStatusCode.BadGateway);
         }
 
+        result.KeyRequirements ??= [];
+        result.CandidateExpectations ??= [];
         result.MatchedRequirements ??= [];
         result.Gaps ??= [];
         result.QuestionsToVerify ??= [];
