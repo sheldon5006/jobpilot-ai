@@ -137,7 +137,7 @@ function inferExplicitRequirements(description: string): string[] {
       : "Available 14–20 hours per week");
   }
 
-  if (/\b(?:vor ort|on.?site|in the office|im büro|im buero)\b/i.test(text)) {
+  if (/\b(?:vor ort|on.?site|in the office|im büro|im buero|design-office)\b/i.test(text)) {
     if (/\b(?:köln|cologne)\b/i.test(text)) {
       inferred.push(twoOrThreeDays
         ? "Available to work on-site in Cologne 2–3 weekdays"
@@ -208,9 +208,19 @@ function renderCandidateExpectations(result: JobAnalysisResult): void {
   const fromModel = Array.isArray(result.candidateExpectations)
     ? result.candidateExpectations.map(normalizeRequirement).filter(Boolean)
     : [];
-  const expectations = fromModel.length > 0
-    ? fromModel
-    : inferExplicitRequirements(descriptionInput.value).slice(0, 5);
+  const inferred = inferExplicitRequirements(descriptionInput.value);
+  // Keep explicit eligibility requirements visible even if the model's list is short.
+  const candidates = [...inferred.slice(0, 4), ...fromModel, ...inferred.slice(4)];
+  const expectations: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const value = normalizeRequirement(candidate);
+    const key = value.toLocaleLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    expectations.push(value);
+    if (expectations.length >= 5) break;
+  }
 
   if (expectations.length === 0) {
     const item = document.createElement("li");
