@@ -86,7 +86,13 @@ public static class ProfileEvidenceCatalog
                 continue;
             }
 
-            Add("LAN", "language", "Languages", $"{language.Language.Trim()}: {language.Proficiency?.Trim()}");
+            var verifiedProficiency = CleanFactText(language.Proficiency);
+            if (verifiedProficiency.Length == 0)
+            {
+                continue;
+            }
+
+            Add("LAN", "language", "Languages", $"{language.Language.Trim()}: {verifiedProficiency}");
         }
 
         Add("AUTH", "work_authorization", "Work authorization", profile.WorkAuthorization);
