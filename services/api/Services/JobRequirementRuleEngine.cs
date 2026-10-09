@@ -30,7 +30,7 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex EmploymentMetadataQuestion = new(
-        @"\b(?:employment\s+(?:(?:start|end)\s+)?dates?|exact\s+(?:employment\s+)?dates?|dates?\s+for\s+(?:the\s+)?[\w.-]+\s+roles?)\b",
+        @"\b(?:(?:please\s+)?(?:provide|confirm|share|enter|specify)\s+(?:the\s+)?(?:actual\s+)?(?:start\s+and\s+end\s+dates?|employment\s+dates?|professional\s+roles?\s+(?:start\s+and\s+end\s+)?dates?)|(?:actual\s+)?start\s+and\s+end\s+dates?|employment\s+(?:(?:start|end)\s+)?dates?|exact\s+(?:employment\s+)?dates?|dates?\s+for\s+(?:the\s+)?[\w.-]+\s+roles?|experience\s+duration|duration\s+of\s+(?:your\s+)?(?:professional|work|employment)\s+experience)\b|\b(?:to\s+verify|verify|confirm)\s+(?:your\s+)?(?:experience\s+duration|employment\s+dates?)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex WorkAuthorizationTopic = new(
@@ -127,7 +127,8 @@ public static class JobRequirementRuleEngine
                 @"\b(?:unknown|unverified|placeholder|gap|verify|verified|missing|not specified)\b",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-            return !(mentionsDatesOrDuration && indicatesUnknown);
+            var asksToVerifyMetadata = EmploymentMetadataQuestion.IsMatch(sentence);
+            return !(asksToVerifyMetadata || (mentionsDatesOrDuration && indicatesUnknown));
         })).Trim();
     }
 
