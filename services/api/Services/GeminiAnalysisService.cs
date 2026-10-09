@@ -64,6 +64,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             - matchScore: integer 0–100
             - detectedLanguage: original vacancy language
             - englishSummary: always in plain English; for a German or other non-English JD, explain the role and key responsibilities in 2–3 short sentences, without candidate-fit commentary
+            - keyRequirements: 3–6 concise requirements explicitly stated in the vacancy. Prioritise language level, education/enrolment, weekly hours/availability, location/on-site attendance, and must-have skills or experience. Do not return generic labels like "Werkstudent" instead of actual requirements.
+            - candidateExpectations: 3–5 short English points describing what an applicant is expected to bring or be available for, based on explicit candidate requirements and eligibility details.
             - summary: concise overall fit
             - matchedRequirements: [{requirement, evidence, evidenceIds}]. evidenceIds must contain exact IDs from PROFILE FACTS JSON; the API validates IDs and renders evidence from validated profile facts.
             - gaps: [{requirement, severity, status, explanation}], where severity is Must-have, Preferred, or Unknown; status is Unverified or Unmet
@@ -71,7 +73,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             - rationale: recommendation supported by profile facts
 
             Use Unmet only for an explicit profile conflict (for example, B1 stated against mandatory C2); missing or placeholder information is Unverified. The vacancy is never proof the candidate meets a requirement. Do not present academic/project skills as professional experience.
-            Keep output compact to prevent truncation: return at most 5 matchedRequirements, at most 2 evidenceIds per match, at most 5 gaps, and at most 3 questionsToVerify. Each evidence, explanation, summary, and rationale should be one short sentence. Cite only the minimum profile-fact IDs needed to support each match; never emit long lists of related IDs.
+            Keep output compact to prevent truncation: return at most 6 keyRequirements, 5 candidateExpectations, 5 matchedRequirements, 2 evidenceIds per match, 5 gaps, and 3 questionsToVerify. Each requirement/expectation must be a short phrase, not a paragraph. Include language and availability requirements whenever stated. Each evidence, explanation, summary, and rationale should be one short sentence. Cite only the minimum profile-fact IDs needed to support each match; never emit long lists of related IDs.
             """;
 
         var payload = new
@@ -105,6 +107,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
                                 matchScore = new { type = "integer", minimum = 0, maximum = 100 },
                                 detectedLanguage = new { type = "string" },
                                 englishSummary = new { type = "string" },
+                                keyRequirements = new { type = "array", items = new { type = "string" } },
+                                candidateExpectations = new { type = "array", items = new { type = "string" } },
                                 summary = new { type = "string" },
                                 matchedRequirements = new
                                 {
@@ -144,8 +148,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
                             },
                             required = new[]
                             {
-                                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "summary",
-                                "matchedRequirements", "gaps", "questionsToVerify", "rationale"
+                                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "keyRequirements",
+                                "candidateExpectations", "summary", "matchedRequirements", "gaps", "questionsToVerify", "rationale"
                             },
                             additionalProperties = false
                         }
