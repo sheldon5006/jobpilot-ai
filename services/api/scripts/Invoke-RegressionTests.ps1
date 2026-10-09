@@ -113,7 +113,7 @@ function Test-ProfilePlaceholder {
     param([AllowNull()][string]$Text)
 
     if ([string]::IsNullOrWhiteSpace($Text)) { return $true }
-    return $Text.Trim() -match '(?i)^(?:replace\b|placeholder\b|unknown\b|not\s+specified\b|not\s+provided\b|tbd\b|n\s*/\s*a\b)'
+    return $Text.Trim() -match '(?i)^(?:replace\b|placeholder\b|unknown\b|not\s+specified\b|not\s+provided\b|add\b|enter\b|update\b|fill\s+in\b|tbd\b|n\s*/\s*a\b)'
 }
 
 function Get-CleanProfileFactText {
