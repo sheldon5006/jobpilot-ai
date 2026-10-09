@@ -1,13 +1,30 @@
 {
   "manifest_version": 3,
   "name": "DBot — Job Assistant",
-  "version": "0.2.0",
-  "description": "Evaluate job descriptions against your profile and prepare tailored applications.",
+  "version": "0.3.0",
+  "minimum_chrome_version": "114",
+  "description": "Compare job postings with your profile in a persistent browser side panel.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
   "host_permissions": [
     "http://127.0.0.1:5080/*"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
   "action": {
-    "default_title": "Open DBot Job Assistant",
-    "default_popup": "popup.html"
+    "default_title": "Open DBot Side Panel"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   }
 }
