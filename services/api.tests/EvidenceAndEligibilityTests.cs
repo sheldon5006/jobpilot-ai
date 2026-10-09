@@ -122,7 +122,7 @@ public sealed class EvidenceAndEligibilityTests
 
         var match = Assert.Single(result.MatchedRequirements);
         Assert.Equal(fact, match.Evidence);
-        Assert.Equal(["EXP-001"], match.EvidenceIds);
+        Assert.Equal("EXP-001", Assert.Single(match.EvidenceIds));
         Assert.Empty(result.EvidenceValidationWarnings);
     }
 
