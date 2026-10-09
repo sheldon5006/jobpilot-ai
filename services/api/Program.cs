@@ -381,6 +381,11 @@ static async Task<IResult> AnalyzeJobAsync(
             ? await ollamaAnalyzer.AnalyzeAsync(normalizedRequest, profile, cancellationToken)
             : await geminiAnalyzer.AnalyzeAsync(normalizedRequest, profile, cancellationToken);
 
+        if (!request.SaveToHistory)
+        {
+            return Results.Ok(result);
+        }
+
         var savedJob = new SavedJob
         {
             JobTitle = string.IsNullOrWhiteSpace(request.JobTitle) ? "Untitled role" : request.JobTitle.Trim(),
