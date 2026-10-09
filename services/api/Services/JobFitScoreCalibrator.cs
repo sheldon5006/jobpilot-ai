@@ -165,17 +165,30 @@ public static class JobFitScoreCalibrator
             return;
         }
 
-        // Preferred gaps alone do not block Apply. Evidence-validation warnings above do.
+        // Once hard gates and evidence validation are resolved, the final recommendation
+        // follows the explicit fit threshold instead of allowing the model's label to override it.
         var hasOnlyNonBlockingGaps = gaps.All(gap => IsSeverity(gap, "Preferred"));
-        if (result.Recommendation == "Review" &&
-            result.MatchScore >= 80 &&
-            hasOnlyNonBlockingGaps)
+        if (result.MatchScore >= 80 && hasOnlyNonBlockingGaps)
         {
+            if (!string.Equals(result.Recommendation, "Apply", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Rationale = AppendOnce(
+                    result.Rationale,
+                    "Recommendation set to Apply because no mandatory gaps remain, all remaining gaps are preferred, and the calibrated fit score is at least 80.");
+            }
+
             result.Recommendation = "Apply";
+            return;
+        }
+
+        if (!string.Equals(result.Recommendation, "Review", StringComparison.OrdinalIgnoreCase))
+        {
             result.Rationale = AppendOnce(
                 result.Rationale,
-                "Recommendation set to Apply because no mandatory gaps remain; any remaining gaps are preferred rather than required.");
+                "Recommendation set to Review because no mandatory requirement is explicitly unmet, but the calibrated fit score or remaining gaps do not meet the Apply threshold.");
         }
+
+        result.Recommendation = "Review";
     }
 
     private static string RemoveUnmetContradictions(string? text)
