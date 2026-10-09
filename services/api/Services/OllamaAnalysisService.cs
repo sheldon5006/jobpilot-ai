@@ -22,7 +22,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             Only assess requirements that are actually stated in the vacancy. Clearly distinguish required qualifications from preferences. Do not treat the vacancy itself as proof the candidate meets a requirement. Keep professional experience separate from academic or project work.
             When the vacancy asks for an important fact that the profile does not establish, mark it Unverified and ask a short, direct question in natural everyday English. Ask only about details relevant to a stated job requirement. Do not ask for employment dates or calculate a minimum duration unless the vacancy states an experience threshold. Do not mention internal profile field names or tell the user to edit JSON.
             Use Apply for a strong evidenced match, Review when an important required fact is unclear, and Skip only when the profile clearly conflicts with a mandatory requirement. Preferences alone should not block applying. The score is a rough fit estimate, not hiring probability.
-            For non-English vacancies, identify the original language and summarise the vacancy in English. Return one valid JSON object only, without Markdown.
+            Always write englishSummary in plain English, including when the vacancy is written in German or another language. Summarise what the role does, its main responsibilities, and the most important requirements in 2–3 short sentences; translate the meaning rather than copying non-English wording. Keep englishSummary about the vacancy only, never about the candidate. Also identify the vacancy's original language in detectedLanguage. Return one valid JSON object only, without Markdown.
             """;
 
         var jobDetails = new
@@ -46,7 +46,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             {JsonSerializer.Serialize(jobDetails, JsonOptions)}
 
             Return concise JSON matching the supplied schema:
-            - englishSummary: vacancy only; do not mention candidate fit.
+            - englishSummary: always plain English; if the vacancy is German or another language, explain the role and main responsibilities in 2–3 short sentences; never mention candidate fit.
             - summary and rationale: evidence-based fit, using profile facts.
             - recommendation: exactly Apply, Review, or Skip; matchScore: integer 0–100.
             - detectedLanguage: language of the original vacancy.
