@@ -7,6 +7,9 @@
 *.pem
 *.key
 
+# Local candidate data (may contain personal information)
+services/api/candidate-profile.json
+
 # Node / Angular
 node_modules/
 dist/
