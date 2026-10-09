@@ -46,7 +46,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         };
 
         var profileFacts = ProfileEvidenceCatalog.Create(profile);
-        var userPrompt = $"""
+        var userPrompt = $$"""
             Assess the vacancy against the candidate profile.
 
             PROFILE JSON:
