@@ -184,3 +184,80 @@ input:focus, textarea:focus, select:focus { border-color: #6481ee; box-shadow: 0
   .toolbar select { width: 100%; }
   .page-footer { flex-direction: column; }
 }
+
+
+/* Career story and profile editor */
+.page-view[hidden] { display: none !important; }
+.profile-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+.profile-page-header h1 { margin-bottom: 6px; }
+.profile-page-header .button { flex: 0 0 auto; }
+.profile-stats-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 17px; }
+.profile-stat { padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.profile-stat strong { display: block; margin-top: 8px; font: 800 25px Manrope,sans-serif; letter-spacing: -.05em; }
+.profile-story-panel { padding: 20px; margin-bottom: 15px; }
+.profile-story-panel > h2 { margin-bottom: 12px; font-size: 15px; letter-spacing: -.03em; }
+.profile-summary-view { margin: 13px 0 0; color: #4c5970; font-size: 12px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.story-subsection { margin-top: 18px; }
+.story-subsection h3 { margin-bottom: 9px; color: #58657b; font-size: 11px; }
+.chip-list { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px; }
+.skill-chip { display: inline-flex; align-items: center; max-width: 100%; padding: 6px 9px; border: 1px solid #e4e9f2; border-radius: 7px; background: #f7f9fd; color: #516078; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.skill-chip.empty-chip { color: #9aa3b2; border-style: dashed; background: #fff; }
+.career-timeline { display: grid; gap: 0; margin-top: 16px; }
+.career-story-item { position: relative; display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 12px; padding-bottom: 22px; }
+.career-story-item:last-child { padding-bottom: 0; }
+.career-timeline-rail { position: relative; display: flex; justify-content: center; }
+.career-timeline-rail::after { position: absolute; top: 12px; bottom: -2px; width: 1px; content: ""; background: #dce4f5; }
+.career-story-item:last-child .career-timeline-rail::after { display: none; }
+.career-timeline-dot { position: relative; z-index: 1; width: 10px; height: 10px; margin-top: 4px; border: 2px solid #6683ee; border-radius: 99px; background: white; box-shadow: 0 0 0 4px #edf2ff; }
+.career-story-content h3 { margin-bottom: 4px; color: #26344b; font-size: 13px; }
+.career-story-period { display: block; margin-bottom: 9px; color: #8591a5; font-size: 10px; }
+.career-story-content ul { display: grid; gap: 5px; margin: 0; padding-left: 17px; color: #58657b; font-size: 11px; line-height: 1.6; }
+.career-story-empty { padding: 14px; border: 1px dashed #d9e1ed; border-radius: 9px; color: #8994a7; font-size: 11px; }
+.profile-two-column { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.profile-two-column .profile-story-panel { margin: 0; min-width: 0; }
+.profile-two-column .profile-story-panel h2 { margin-bottom: 12px; font-size: 14px; }
+.story-list { display: grid; gap: 7px; margin: 0; padding-left: 17px; color: #59667c; font-size: 11px; line-height: 1.6; }
+.story-list .empty-detail { list-style: none; color: #98a2b3; font-style: italic; }
+.profile-detail-text { margin: 0; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; white-space: pre-wrap; }
+.profile-updated-at { margin: 14px 0 0; color: #a0a9b6; font-size: 9px; text-align: right; }
+.profile-edit-form { display: grid; gap: 15px; }
+.profile-edit-panel { padding: 20px; }
+.profile-edit-panel h2 { margin-bottom: 8px; font-size: 15px; letter-spacing: -.03em; }
+.profile-edit-panel > .muted { margin-bottom: 15px; font-size: 11px; line-height: 1.6; }
+.profile-edit-panel > .field { margin-top: 14px; }
+.profile-edit-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 15px; margin-top: 14px; }
+.profile-edit-grid textarea { min-height: 100px; }
+.experience-editor { display: grid; gap: 11px; margin-top: 16px; }
+.experience-edit-card { padding: 15px; border: 1px solid #e4e9f2; border-radius: 11px; background: #fbfcff; }
+.experience-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.experience-card-heading strong { color: #43516a; font: 700 11px Manrope,sans-serif; }
+.experience-card-heading button { min-height: 29px; padding: 0 9px; border: 1px solid #e5e8ef; border-radius: 7px; color: #a24d4d; background: white; font-size: 9px; font-weight: 700; }
+.experience-edit-card textarea { min-height: 88px; }
+.profile-form-actions { display: flex; justify-content: flex-end; gap: 9px; }
+.profile-form-actions .button { min-width: 130px; }
+.cv-section { margin-top: 18px; padding: 17px; border: 1px solid #e1e7f2; border-radius: 11px; background: #f9fbff; }
+.cv-section h3 { margin-bottom: 0; font-size: 12px; }
+.cv-badge { padding: 5px 7px; border-radius: 6px; background: #eef2fa; color: #63708a; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.cv-copy { margin: 10px 0 13px; font-size: 10px; line-height: 1.6; }
+.cv-upload-form { display: grid; gap: 10px; }
+.cv-upload-form input[type="file"] { height: auto; min-height: 38px; padding: 7px; background: white; }
+.cv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cv-actions .button { min-height: 34px; }
+.button-danger { color: #a44343; border-color: #f0d7d7; background: #fff7f7; }
+.button-danger:hover:not(:disabled) { background: #ffeded; }
+.cv-current-info { margin: 0; color: #8995a8; font-size: 10px; overflow-wrap: anywhere; }
+.cv-current-info.has-cv { color: #327654; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .profile-page-header { align-items: flex-start; }
+  .profile-page-header .button { padding: 0 11px; }
+  .profile-stats-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+  .profile-stat { padding: 13px; }
+  .profile-stat strong { font-size: 22px; }
+  .profile-two-column, .profile-edit-grid { grid-template-columns: 1fr; }
+  .profile-story-panel, .profile-edit-panel { padding: 15px; }
+  .profile-form-actions { flex-direction: column-reverse; }
+  .profile-form-actions .button { width: 100%; }
+  .cv-actions { flex-direction: column; }
+  .cv-actions .button { width: 100%; }
+}
