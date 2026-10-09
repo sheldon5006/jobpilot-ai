@@ -32,7 +32,50 @@ interface ApiProblem {
   detail?: string;
 }
 
+interface ExtractedJobDetails {
+  found: boolean;
+  title: string;
+  company: string;
+  description: string;
+  url: string;
+  pageTitle: string;
+  reason: string;
+  extractionSource: string;
+}
+
+interface DbotSettings {
+  autoFetchEnabled: boolean;
+  autoAnalyzeEnabled: boolean;
+}
+
+interface SettingsResponse {
+  ok: boolean;
+  error?: string;
+  settings?: DbotSettings;
+  allSitesPermission?: boolean;
+}
+
+interface FetchResponse {
+  ok: boolean;
+  error?: string;
+  tabId?: number;
+  job?: ExtractedJobDetails;
+  source?: "manual";
+}
+
+interface DetectionMessage {
+  type: "DBOT_JOB_DETAILS_DETECTED";
+  tabId: number;
+  job: ExtractedJobDetails;
+  source: "auto";
+  autoAnalyze: boolean;
+}
+
 const API_BASE_URL = "http://127.0.0.1:5080";
+const ALL_HTTP_ORIGINS = ["http://*/*", "https://*/*"];
+const autoAnalyzedUrls = new Set<string>();
+let settings: DbotSettings = { autoFetchEnabled: false, autoAnalyzeEnabled: false };
+let activeJobUrl = "";
 
 function element<T extends HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -65,6 +108,16 @@ const resultMeta = element<HTMLElement>("#result-meta");
 const matchesList = element<HTMLUListElement>("#matches-list");
 const gapsList = element<HTMLUListElement>("#gaps-list");
 const questionsList = element<HTMLUListElement>("#questions-list");
+
+const fetchPageButton = element<HTMLButtonElement>("#fetch-current-page-button");
+const pageFetchStatus = element<HTMLElement>("#page-fetch-status");
+const autoFetchToggle = element<HTMLInputElement>("#auto-fetch-toggle");
+const autoAnalyzeToggle = element<HTMLInputElement>("#auto-analyze-toggle");
+
+function setPageStatus(message: string, kind: "info" | "success" | "error" = "info"): void {
+  pageFetchStatus.textContent = message;
+  pageFetchStatus.className = `page-fetch-status ${kind}`;
+}
 
 function showEmptyList(target: HTMLUListElement, message: string): void {
   target.replaceChildren();
@@ -206,21 +259,17 @@ function renderError(message: string): void {
   resultPanel.hidden = false;
 }
 
-form.addEventListener("input", () => {
-  descriptionInput.setCustomValidity("");
-});
-
-form.addEventListener("submit", async (event: SubmitEvent) => {
-  event.preventDefault();
-
+async function analyzeCurrentJob(): Promise<void> {
   const description = descriptionInput.value.trim();
   if (description.length < 40) {
     descriptionInput.setCustomValidity("Please paste at least 40 characters from the job description.");
     descriptionInput.reportValidity();
+    setPageStatus("The detected description is too short. Review it or paste the complete job description.", "error");
     return;
   }
   descriptionInput.setCustomValidity("");
 
+  if (analyzeButton.disabled) return;
   analyzeButton.disabled = true;
   analyzeButton.setAttribute("aria-busy", "true");
   buttonLabel.textContent = "Analysing with Gemini…";
@@ -229,24 +278,20 @@ form.addEventListener("submit", async (event: SubmitEvent) => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/jobs/analyze`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jobTitle: jobTitleInput.value.trim(),
         company: companyInput.value.trim(),
         jobDescription: description
       })
     });
-
     const payload: unknown = await response.json().catch(() => null);
-
     if (!response.ok) {
       const problem = (payload ?? {}) as ApiProblem;
       throw new Error(problem.detail || problem.title || `Local API returned HTTP ${response.status}.`);
     }
-
     renderAnalysis(payload as JobAnalysisResult);
+    setPageStatus("Analysis complete. Review the recommendation and evidence below.", "success");
   } catch (error) {
     const message = error instanceof Error ? error.message : "An unexpected error occurred.";
     if (message.toLowerCase().includes("failed to fetch")) {
@@ -259,4 +304,205 @@ form.addEventListener("submit", async (event: SubmitEvent) => {
     analyzeButton.removeAttribute("aria-busy");
     buttonLabel.textContent = "Analyze job fit";
   }
+}
+
+async function requestSettings(): Promise<void> {
+  try {
+    const response = await chrome.runtime.sendMessage<SettingsResponse>({ type: "DBOT_GET_SETTINGS" });
+    if (!response?.ok || !response.settings) {
+      throw new Error(response?.error || "Could not load settings.");
+    }
+    settings = response.settings;
+    autoFetchToggle.checked = settings.autoFetchEnabled;
+    autoAnalyzeToggle.checked = settings.autoAnalyzeEnabled;
+    autoAnalyzeToggle.disabled = !settings.autoFetchEnabled;
+    if (settings.autoFetchEnabled && response.allSitesPermission) {
+      const result = await chrome.runtime.sendMessage<FetchResponse>({ type: "DBOT_FETCH_CURRENT_PAGE" });
+      if (result?.ok && result.job) {
+        await applyDetectedJob(result.job, settings.autoAnalyzeEnabled, "auto");
+      } else if (result?.error) {
+        setPageStatus(result.error, "info");
+      }
+    }
+  } catch (error) {
+    setPageStatus(error instanceof Error ? error.message : "Could not load settings.", "error");
+  }
+}
+
+async function fetchCurrentPage(): Promise<void> {
+  fetchPageButton.disabled = true;
+  fetchPageButton.textContent = "Reading page HTML…";
+  setPageStatus("Looking for structured job data and visible job-description content…", "info");
+  try {
+    const response = await chrome.runtime.sendMessage<FetchResponse>({ type: "DBOT_FETCH_CURRENT_PAGE" });
+    if (!response?.ok || !response.job) {
+      throw new Error(response?.error || "Could not fetch the current page.");
+    }
+    await applyDetectedJob(response.job, settings.autoAnalyzeEnabled, "manual");
+  } catch (error) {
+    setPageStatus(error instanceof Error ? error.message : "Could not fetch details from this page.", "error");
+  } finally {
+    fetchPageButton.disabled = false;
+    fetchPageButton.textContent = "↧ Fetch from current page";
+  }
+}
+
+async function applyDetectedJob(
+  job: ExtractedJobDetails,
+  shouldAutoAnalyze: boolean,
+  source: "manual" | "auto"
+): Promise<void> {
+  if (!job.found) {
+    setPageStatus(job.reason || "No job description detected. You can paste the description manually.", "error");
+    return;
+  }
+
+  jobTitleInput.value = job.title || job.pageTitle || jobTitleInput.value;
+  companyInput.value = job.company || companyInput.value;
+  descriptionInput.value = job.description;
+  descriptionInput.setCustomValidity("");
+  activeJobUrl = job.url;
+
+  let displayHost = job.url;
+  try {
+    displayHost = new URL(job.url).hostname;
+  } catch {
+    // Keep the complete URL if it isn't a regular web URL.
+  }
+
+  setPageStatus(
+    `Fetched from ${displayHost} (${job.extractionSource}). Review the title, company and description before analysis.`,
+    "success"
+  );
+
+  const analysisKey = job.url;
+  if (shouldAutoAnalyze && !autoAnalyzedUrls.has(analysisKey)) {
+    if (job.description.trim().length < 40) {
+      setPageStatus("Job details were found, but the description is too short to analyse. Review it or paste more text.", "error");
+      return;
+    }
+    autoAnalyzedUrls.add(analysisKey);
+    await analyzeCurrentJob();
+  } else if (source === "auto") {
+    // The details have been filled without silently submitting anything to the AI provider.
+    setPageStatus(
+      `Job details detected on ${displayHost}. Review them and click Analyze job fit when ready.`,
+      "success"
+    );
+  }
+}
+
+async function updateAutoFetchSetting(enabled: boolean): Promise<void> {
+  if (enabled) {
+    // Ask for broad site access only after the user explicitly enables automatic page reading.
+    const permissionRequest = chrome.permissions.request({ origins: ALL_HTTP_ORIGINS });
+    const granted = await permissionRequest;
+    if (!granted) {
+      autoFetchToggle.checked = false;
+      settings.autoFetchEnabled = false;
+      autoAnalyzeToggle.checked = false;
+      autoAnalyzeToggle.disabled = true;
+      setPageStatus("Automatic fetching stays off until you grant page access. You can still fetch the current tab manually.", "error");
+      return;
+    }
+  }
+
+  const requestedAnalyze = enabled && autoAnalyzeToggle.checked;
+  const response = await chrome.runtime.sendMessage<SettingsResponse>({
+    type: "DBOT_SET_SETTINGS",
+    autoFetchEnabled: enabled,
+    autoAnalyzeEnabled: requestedAnalyze
+  });
+  if (!response?.ok || !response.settings) {
+    throw new Error(response?.error || "Could not save the automatic fetching setting.");
+  }
+  settings = response.settings;
+  autoFetchToggle.checked = settings.autoFetchEnabled;
+  autoAnalyzeToggle.checked = settings.autoAnalyzeEnabled;
+  autoAnalyzeToggle.disabled = !settings.autoFetchEnabled;
+
+  if (enabled) {
+    setPageStatus(
+      settings.autoAnalyzeEnabled
+        ? "Auto-fetch and auto-analyse are enabled. Detected job descriptions will be sent to the configured AI provider."
+        : "Auto-fetch is enabled. DBot will fill job details when you open a page; analysis waits until you click Analyze.",
+      "success"
+    );
+    await fetchCurrentPage();
+  } else {
+    settings.autoAnalyzeEnabled = false;
+    autoAnalyzeToggle.checked = false;
+    autoAnalyzeToggle.disabled = true;
+    setPageStatus("Automatic fetching is off. Use Fetch from current page when you need it.", "info");
+  }
+}
+
+form.addEventListener("input", () => {
+  descriptionInput.setCustomValidity("");
 });
+
+form.addEventListener("submit", event => {
+  event.preventDefault();
+  void analyzeCurrentJob();
+});
+
+fetchPageButton.addEventListener("click", () => {
+  void fetchCurrentPage();
+});
+
+autoFetchToggle.addEventListener("change", () => {
+  void updateAutoFetchSetting(autoFetchToggle.checked).catch(error => {
+    autoFetchToggle.checked = settings.autoFetchEnabled;
+    setPageStatus(error instanceof Error ? error.message : "Could not update settings.", "error");
+  });
+});
+
+autoAnalyzeToggle.addEventListener("change", async () => {
+  if (!settings.autoFetchEnabled) {
+    autoAnalyzeToggle.checked = false;
+    return;
+  }
+  try {
+    const response = await chrome.runtime.sendMessage<SettingsResponse>({
+      type: "DBOT_SET_SETTINGS",
+      autoFetchEnabled: true,
+      autoAnalyzeEnabled: autoAnalyzeToggle.checked
+    });
+    if (!response?.ok || !response.settings) throw new Error(response?.error || "Could not save auto-analysis setting.");
+    settings = response.settings;
+    autoAnalyzeToggle.checked = settings.autoAnalyzeEnabled;
+    setPageStatus(
+      settings.autoAnalyzeEnabled
+        ? "Auto-analyse enabled. A detected job and your saved profile are sent to the AI provider without another confirmation."
+        : "Auto-analyse disabled. DBot will fetch job details but wait for you to click Analyze.",
+      "info"
+    );
+  } catch (error) {
+    autoAnalyzeToggle.checked = settings.autoAnalyzeEnabled;
+    setPageStatus(error instanceof Error ? error.message : "Could not update auto-analysis setting.", "error");
+  }
+});
+
+chrome.runtime.onMessage.addListener((message: DetectionMessage | { type: string; tabId?: number; message?: string }) => {
+  if (message.type === "DBOT_SETTINGS_CHANGED") {
+    void requestSettings();
+    return;
+  }
+
+  if (message.type === "DBOT_PAGE_SCAN_FAILED") {
+    void chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
+      if (tab?.id === message.tabId && message.message) setPageStatus(message.message, "error");
+    });
+    return;
+  }
+
+  if (message.type === "DBOT_JOB_DETAILS_DETECTED") {
+    void chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
+      if (tab?.id !== message.tabId) return;
+      const detection = message as DetectionMessage;
+      void applyDetectedJob(detection.job, detection.autoAnalyze, detection.source);
+    });
+  }
+});
+
+void requestSettings();
