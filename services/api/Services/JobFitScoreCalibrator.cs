@@ -96,6 +96,18 @@ public static class JobFitScoreCalibrator
         result.Rationale = AppendOnce(result.Rationale, explanation);
 
         ApplyRecommendationPolicy(result, distinctGaps);
+
+        // Normalize occasional model-generated missing spaces in policy phrases.
+        result.Rationale = Regex.Replace(
+            result.Rationale ?? string.Empty,
+            @"\b(Skip|Review|Apply)because\b",
+            "$1 because",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        result.Summary = Regex.Replace(
+            result.Summary ?? string.Empty,
+            @"\b(Skip|Review|Apply)because\b",
+            "$1 because",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private static void ApplyRecommendationPolicy(
