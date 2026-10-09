@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using JobPilot.Api.Models;
 
 namespace JobPilot.Api.Services;
@@ -5,8 +6,9 @@ namespace JobPilot.Api.Services;
 public sealed record ProfileEvidenceFact(string Id, string Category, string Source, string Text);
 
 /// <summary>
-/// Builds stable, request-local identifiers for verified candidate-profile facts.
-/// IDs are derived from the fact's category and position and are not persisted.
+/// Builds stable, request-local identifiers for facts taken from the candidate profile.
+/// Placeholder clauses are removed, while valid parts of a fact remain available.
+/// IDs are not persisted and do not expose a database identifier.
 /// </summary>
 public static class ProfileEvidenceCatalog
 {
@@ -18,8 +20,8 @@ public static class ProfileEvidenceCatalog
 
         void Add(string prefix, string category, string source, string? text)
         {
-            var value = text?.Trim() ?? string.Empty;
-            if (IsPlaceholder(value) || value.Length == 0)
+            var value = CleanFactText(text);
+            if (value.Length == 0)
             {
                 return;
             }
@@ -27,11 +29,7 @@ public static class ProfileEvidenceCatalog
             counters.TryGetValue(prefix, out var index);
             index++;
             counters[prefix] = index;
-            facts.Add(new ProfileEvidenceFact(
-                $"{prefix}-{index:000}",
-                category,
-                source,
-                value));
+            facts.Add(new ProfileEvidenceFact($"{prefix}-{index:000}", category, source, value));
         }
 
         Add("SUM", "professional_summary", "Professional summary", profile.ProfessionalSummary);
@@ -56,18 +54,14 @@ public static class ProfileEvidenceCatalog
             var isInternship = (experience.Role ?? string.Empty).Contains("intern", StringComparison.OrdinalIgnoreCase);
             var category = isInternship ? "internship_experience" : "professional_experience";
             var prefix = isInternship ? "INT" : "EXP";
-            var roleLabel = string.IsNullOrWhiteSpace(experience.Role)
-                ? "Experience"
-                : experience.Role.Trim();
+            var roleLabel = string.IsNullOrWhiteSpace(experience.Role) ? "Experience" : experience.Role.Trim();
             var source = $"Experience — {roleLabel}";
 
             Add(
                 "DATE",
                 category,
                 $"Experience dates — {roleLabel}",
-                string.IsNullOrWhiteSpace(experience.Period)
-                    ? string.Empty
-                    : $"{roleLabel}: {experience.Period.Trim()}");
+                string.IsNullOrWhiteSpace(experience.Period) ? string.Empty : $"{roleLabel}: {experience.Period.Trim()}");
 
             foreach (var item in experience.Evidence ?? [])
             {
@@ -92,31 +86,38 @@ public static class ProfileEvidenceCatalog
                 continue;
             }
 
-            var proficiency = language.Proficiency?.Trim() ?? string.Empty;
-            if (IsPlaceholder(proficiency))
-            {
-                continue;
-            }
-
-            Add(
-                "LAN",
-                "language",
-                "Languages",
-                $"{language.Language.Trim()}: {proficiency}");
+            Add("LAN", "language", "Languages", $"{language.Language.Trim()}: {language.Proficiency?.Trim()}");
         }
 
         Add("AUTH", "work_authorization", "Work authorization", profile.WorkAuthorization);
-
         return facts;
     }
 
-    private static bool IsPlaceholder(string value) =>
-        string.IsNullOrWhiteSpace(value) ||
-        value.Contains("replace", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("placeholder", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("not specified", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("not provided", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("unknown", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("tbd", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("n/a", StringComparison.OrdinalIgnoreCase);
+    public static string CleanFactText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var retainedClauses = text
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(clause => !IsPlaceholder(clause))
+            .ToList();
+
+        return string.Join("; ", retainedClauses);
+    }
+
+    public static bool IsPlaceholder(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return true;
+        }
+
+        return Regex.IsMatch(
+            text.Trim(),
+            @"^(?:replace\b|placeholder\b|unknown\b|not\s+specified\b|not\s+provided\b|tbd\b|n\s*/\s*a\b)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
 }
