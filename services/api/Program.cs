@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using JobPilot.Api.Data;
 using JobPilot.Api.Models;
@@ -83,13 +84,8 @@ builder.Services.AddHttpClient<OllamaAnalysisService>((services, client) =>
 
 var app = builder.Build();
 
-// This is sufficient for the initial personal dashboard prototype. Use EF migrations
-// when evolving the schema beyond this first version.
-await using (var scope = app.Services.CreateAsyncScope())
-{
-    var database = scope.ServiceProvider.GetRequiredService<JobPilotDbContext>();
-    await database.Database.EnsureCreatedAsync();
-}
+// Ensure new tables also appear in databases created by an earlier prototype build.
+await EnsureDatabaseReadyAsync(app.Services, builder.Environment, builder.Configuration);
 
 app.UseCors("LocalDbotExtension");
 
@@ -98,6 +94,73 @@ app.MapGet("/api/health", () => Results.Ok(new
     status = "ok",
     service = "JobPilot.Api"
 }));
+
+app.MapGet("/api/profile", async (JobPilotDbContext database, CancellationToken cancellationToken) =>
+{
+    var document = await database.CandidateProfiles.AsNoTracking()
+        .FirstOrDefaultAsync(item => item.Id == "primary", cancellationToken);
+
+    if (document is null)
+    {
+        return Results.Problem(
+            title: "Candidate profile is not available",
+            detail: "Save your career story from My Profile before analysing a job.",
+            statusCode: StatusCodes.Status409Conflict);
+    }
+
+    try
+    {
+        var profile = JsonSerializer.Deserialize<CandidateProfile>(
+            document.ProfileJson,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        return Results.Ok(new CandidateProfileResponse(profile ?? new CandidateProfile(), document.UpdatedAtUtc));
+    }
+    catch (JsonException)
+    {
+        return Results.Problem(
+            title: "Saved candidate profile could not be read",
+            detail: "Open My Profile and save the profile again.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
+
+app.MapPut("/api/profile", async (
+    CandidateProfile submittedProfile,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    var errors = ValidateCandidateProfile(submittedProfile);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
+    var profile = NormalizeCandidateProfile(submittedProfile);
+    var profileJson = JsonSerializer.Serialize(profile, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    if (profileJson.Length > 250_000)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["profile"] = ["The complete profile must be smaller than 250,000 characters."]
+        });
+    }
+
+    var document = await database.CandidateProfiles
+        .FirstOrDefaultAsync(item => item.Id == "primary", cancellationToken);
+
+    if (document is null)
+    {
+        document = new CandidateProfileDocument { Id = "primary" };
+        database.CandidateProfiles.Add(document);
+    }
+
+    document.ProfileJson = profileJson;
+    document.UpdatedAtUtc = DateTime.UtcNow;
+    await database.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new CandidateProfileResponse(profile, document.UpdatedAtUtc));
+});
 
 app.MapGet("/api/jobs", async (JobPilotDbContext database, CancellationToken cancellationToken) =>
 {
@@ -113,6 +176,8 @@ app.MapGet("/api/jobs", async (JobPilotDbContext database, CancellationToken can
             job.DetectedLanguage,
             job.Summary,
             job.ApplicationStatus,
+            job.CvAttachment != null,
+            job.CvAttachment == null ? null : job.CvAttachment.FileName,
             job.CreatedAtUtc,
             job.UpdatedAtUtc))
         .ToListAsync(cancellationToken);
@@ -156,6 +221,11 @@ app.MapGet("/api/jobs/{id:guid}", async (
             statusCode: StatusCodes.Status500InternalServerError);
     }
 
+    var cvMetadata = await database.JobCvAttachments.AsNoTracking()
+        .Where(attachment => attachment.JobId == id)
+        .Select(attachment => new { attachment.FileName, attachment.UploadedAtUtc, attachment.SizeBytes })
+        .FirstOrDefaultAsync(cancellationToken);
+
     return Results.Ok(new SavedJobDetails(
         job.Id,
         job.JobTitle,
@@ -163,6 +233,9 @@ app.MapGet("/api/jobs/{id:guid}", async (
         job.JobDescription,
         job.ApplicationStatus,
         job.Notes,
+        cvMetadata?.FileName,
+        cvMetadata?.UploadedAtUtc,
+        cvMetadata?.SizeBytes,
         job.CreatedAtUtc,
         job.UpdatedAtUtc,
         analysis));
@@ -213,6 +286,152 @@ app.MapPut("/api/jobs/{id:guid}", async (
         job.Notes,
         job.UpdatedAtUtc
     });
+});
+
+
+app.MapPost("/api/jobs/{id:guid}/cv", async (
+    Guid id,
+    HttpRequest request,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    const long maxCvBytes = 10L * 1024 * 1024;
+
+    if (!request.HasFormContentType)
+    {
+        return Results.Problem(
+            title: "CV upload must use multipart form data",
+            detail: "Choose a PDF or DOCX file and try again.",
+            statusCode: StatusCodes.Status415UnsupportedMediaType);
+    }
+
+    if (request.ContentLength > maxCvBytes + 128_000)
+    {
+        return Results.Problem(
+            title: "CV file is too large",
+            detail: "The maximum CV file size is 10 MB.",
+            statusCode: StatusCodes.Status413PayloadTooLarge);
+    }
+
+    var form = await request.ReadFormAsync(cancellationToken);
+    var file = form.Files.GetFile("file");
+    if (file is null || file.Length == 0)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["file"] = ["Choose a PDF or DOCX CV to attach."]
+        });
+    }
+
+    if (file.Length > maxCvBytes)
+    {
+        return Results.Problem(
+            title: "CV file is too large",
+            detail: "The maximum CV file size is 10 MB.",
+            statusCode: StatusCodes.Status413PayloadTooLarge);
+    }
+
+    var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+    if (extension is not (".pdf" or ".docx"))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["file"] = ["Only PDF and DOCX CV files are supported."]
+        });
+    }
+
+    await using var fileStream = file.OpenReadStream();
+    using var memoryStream = new MemoryStream();
+    await fileStream.CopyToAsync(memoryStream, cancellationToken);
+    var bytes = memoryStream.ToArray();
+
+    if (extension == ".pdf" &&
+        (bytes.Length < 5 || Encoding.ASCII.GetString(bytes, 0, 5) != "%PDF-"))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["file"] = ["The selected file does not appear to be a valid PDF."]
+        });
+    }
+
+    if (extension == ".docx" &&
+        (bytes.Length < 4 || bytes[0] != 0x50 || bytes[1] != 0x4B))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["file"] = ["The selected file does not appear to be a valid DOCX document."]
+        });
+    }
+
+    var jobExists = await database.SavedJobs.AnyAsync(job => job.Id == id, cancellationToken);
+    if (!jobExists)
+    {
+        return Results.NotFound(new { title = "Saved job not found." });
+    }
+
+    var attachment = await database.JobCvAttachments
+        .FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+    if (attachment is null)
+    {
+        attachment = new JobCvAttachment { JobId = id };
+        database.JobCvAttachments.Add(attachment);
+    }
+
+    var safeFileName = Path.GetFileName(file.FileName);
+    if (safeFileName.Length > 255)
+    {
+        safeFileName = safeFileName[^255..];
+    }
+
+    attachment.FileName = safeFileName;
+    attachment.ContentType = extension == ".pdf"
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    attachment.Bytes = bytes;
+    attachment.SizeBytes = bytes.LongLength;
+    attachment.UploadedAtUtc = DateTime.UtcNow;
+    await database.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new
+    {
+        attachment.FileName,
+        attachment.SizeBytes,
+        attachment.UploadedAtUtc
+    });
+});
+
+app.MapGet("/api/jobs/{id:guid}/cv", async (
+    Guid id,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    var attachment = await database.JobCvAttachments.AsNoTracking()
+        .FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+
+    if (attachment is null)
+    {
+        return Results.NotFound(new { title = "No CV is attached to this job." });
+    }
+
+    return Results.File(attachment.Bytes, attachment.ContentType, attachment.FileName);
+});
+
+app.MapDelete("/api/jobs/{id:guid}/cv", async (
+    Guid id,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    var attachment = await database.JobCvAttachments
+        .FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+
+    if (attachment is null)
+    {
+        return Results.NotFound(new { title = "No CV is attached to this job." });
+    }
+
+    database.JobCvAttachments.Remove(attachment);
+    await database.SaveChangesAsync(cancellationToken);
+    return Results.NoContent();
 });
 
 app.MapPost("/api/jobs/analyze", AnalyzeJobAsync);
@@ -298,51 +517,34 @@ static async Task<IResult> AnalyzeJobAsync(
         });
     }
 
-    var configuredPath = configuration["DBOT_PROFILE_PATH"];
-    var profilePath = string.IsNullOrWhiteSpace(configuredPath)
-        ? Path.Combine(environment.ContentRootPath, "candidate-profile.json")
-        : Path.GetFullPath(configuredPath, environment.ContentRootPath);
-
-    if (!File.Exists(profilePath))
-    {
-        return Results.Problem(
-            title: "Candidate profile is not configured",
-            detail: "Copy candidate-profile.example.json to candidate-profile.json in services/api, then fill it with your accurate information. The local candidate profile is ignored by Git.",
-            statusCode: StatusCodes.Status409Conflict);
-    }
+    var profileDocument = await database.CandidateProfiles.AsNoTracking()
+        .FirstOrDefaultAsync(item => item.Id == "primary", cancellationToken);
 
     CandidateProfile? profile;
     try
     {
-        await using var profileStream = File.OpenRead(profilePath);
-        profile = await JsonSerializer.DeserializeAsync<CandidateProfile>(
-            profileStream,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web),
-            cancellationToken);
+        profile = profileDocument is null
+            ? null
+            : JsonSerializer.Deserialize<CandidateProfile>(
+                profileDocument.ProfileJson,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
     }
     catch (JsonException)
     {
         return Results.Problem(
-            title: "Candidate profile JSON is invalid",
-            detail: "Check the syntax of services/api/candidate-profile.json.",
+            title: "Saved candidate profile could not be read",
+            detail: "Open My Profile and save the profile again.",
             statusCode: StatusCodes.Status409Conflict);
-    }
-    catch (IOException)
-    {
-        return Results.Problem(
-            title: "Candidate profile could not be read",
-            detail: "Check the file path and permissions for the local candidate profile.",
-            statusCode: StatusCodes.Status500InternalServerError);
     }
 
     if (profile is null ||
         string.IsNullOrWhiteSpace(profile.ProfessionalSummary) ||
-        profile.ProfessionalSummary.Contains("Replace this text", StringComparison.OrdinalIgnoreCase) ||
+        profile.ProfessionalSkills is null ||
         profile.ProfessionalSkills.Count == 0)
     {
         return Results.Problem(
             title: "Candidate profile needs to be completed",
-            detail: "Add a factual professional summary and at least one professional skill to candidate-profile.json before analysing jobs.",
+            detail: "Open My Profile and add a professional summary and at least one professional skill before analysing jobs.",
             statusCode: StatusCodes.Status409Conflict);
     }
 
@@ -454,4 +656,184 @@ static async Task<IResult> AnalyzeJobAsync(
             detail: detail,
             statusCode: StatusCodes.Status504GatewayTimeout);
     }
+}
+
+
+static async Task EnsureDatabaseReadyAsync(
+    IServiceProvider services,
+    IWebHostEnvironment environment,
+    IConfiguration configuration)
+{
+    await using var scope = services.CreateAsyncScope();
+    var database = scope.ServiceProvider.GetRequiredService<JobPilotDbContext>();
+    await database.Database.EnsureCreatedAsync();
+
+    var providerName = database.Database.ProviderName ?? string.Empty;
+    if (providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
+    {
+        await database.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "CandidateProfiles" (
+                "Id" TEXT NOT NULL CONSTRAINT "PK_CandidateProfiles" PRIMARY KEY,
+                "ProfileJson" TEXT NOT NULL,
+                "UpdatedAtUtc" TEXT NOT NULL
+            );
+            """);
+
+        await database.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "JobCvAttachments" (
+                "JobId" TEXT NOT NULL CONSTRAINT "PK_JobCvAttachments" PRIMARY KEY,
+                "FileName" TEXT NOT NULL,
+                "ContentType" TEXT NOT NULL,
+                "Bytes" BLOB NOT NULL,
+                "SizeBytes" INTEGER NOT NULL,
+                "UploadedAtUtc" TEXT NOT NULL,
+                CONSTRAINT "FK_JobCvAttachments_SavedJobs_JobId"
+                    FOREIGN KEY ("JobId") REFERENCES "SavedJobs" ("Id") ON DELETE CASCADE
+            );
+            """);
+    }
+    else if (providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+    {
+        await database.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "CandidateProfiles" (
+                "Id" character varying(32) NOT NULL CONSTRAINT "PK_CandidateProfiles" PRIMARY KEY,
+                "ProfileJson" text NOT NULL,
+                "UpdatedAtUtc" timestamp with time zone NOT NULL
+            );
+            """);
+
+        await database.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "JobCvAttachments" (
+                "JobId" uuid NOT NULL CONSTRAINT "PK_JobCvAttachments" PRIMARY KEY,
+                "FileName" character varying(255) NOT NULL,
+                "ContentType" character varying(160) NOT NULL,
+                "Bytes" bytea NOT NULL,
+                "SizeBytes" bigint NOT NULL,
+                "UploadedAtUtc" timestamp with time zone NOT NULL,
+                CONSTRAINT "FK_JobCvAttachments_SavedJobs_JobId"
+                    FOREIGN KEY ("JobId") REFERENCES "SavedJobs" ("Id") ON DELETE CASCADE
+            );
+            """);
+    }
+    else
+    {
+        throw new InvalidOperationException($"Database provider '{providerName}' is not supported.");
+    }
+
+    var existingProfile = await database.CandidateProfiles
+        .AnyAsync(item => item.Id == "primary");
+    if (existingProfile)
+    {
+        return;
+    }
+
+    var configuredPath = configuration["DBOT_PROFILE_PATH"];
+    var profilePath = string.IsNullOrWhiteSpace(configuredPath)
+        ? Path.Combine(environment.ContentRootPath, "candidate-profile.json")
+        : Path.GetFullPath(configuredPath, environment.ContentRootPath);
+
+    CandidateProfile profile = new();
+    if (File.Exists(profilePath))
+    {
+        try
+        {
+            await using var profileStream = File.OpenRead(profilePath);
+            profile = await JsonSerializer.DeserializeAsync<CandidateProfile>(
+                profileStream,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new CandidateProfile();
+        }
+        catch (Exception exception) when (exception is JsonException or IOException)
+        {
+            Console.Error.WriteLine($"Could not import the local candidate profile: {exception.Message}");
+        }
+    }
+
+    database.CandidateProfiles.Add(new CandidateProfileDocument
+    {
+        Id = "primary",
+        ProfileJson = JsonSerializer.Serialize(profile, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+        UpdatedAtUtc = DateTime.UtcNow
+    });
+    await database.SaveChangesAsync();
+}
+
+static Dictionary<string, string[]> ValidateCandidateProfile(CandidateProfile profile)
+{
+    var errors = new Dictionary<string, string[]>();
+    void AddError(string field, string message) => errors[field] = [message];
+
+    if ((profile.ProfessionalSummary?.Length ?? 0) > 6000)
+        AddError("professionalSummary", "The professional summary must be 6,000 characters or fewer.");
+    if ((profile.WorkAuthorization?.Length ?? 0) > 500)
+        AddError("workAuthorization", "Work authorization must be 500 characters or fewer.");
+    if ((profile.TargetRoles?.Count ?? 0) > 100 ||
+        (profile.ProfessionalSkills?.Count ?? 0) > 100 ||
+        (profile.ProjectAndAcademicSkills?.Count ?? 0) > 100 ||
+        (profile.Education?.Count ?? 0) > 100 ||
+        (profile.Certifications?.Count ?? 0) > 100 ||
+        (profile.Constraints?.Count ?? 0) > 100)
+        AddError("lists", "Each list can contain at most 100 entries.");
+    if ((profile.Experience?.Count ?? 0) > 50)
+        AddError("experience", "The career timeline can contain at most 50 roles.");
+    if ((profile.Languages?.Count ?? 0) > 50)
+        AddError("languages", "The profile can contain at most 50 languages.");
+
+    var ordinaryLists = new[]
+    {
+        profile.TargetRoles, profile.ProfessionalSkills, profile.ProjectAndAcademicSkills,
+        profile.Education, profile.Certifications, profile.Constraints
+    };
+    if (ordinaryLists.SelectMany(list => list ?? []).Any(value => (value?.Length ?? 0) > 2000))
+        AddError("listEntry", "Individual list entries must be 2,000 characters or fewer.");
+
+    if ((profile.Experience ?? []).Any(item =>
+        (item.Role?.Length ?? 0) > 160 ||
+        (item.Period?.Length ?? 0) > 120 ||
+        (item.Evidence?.Count ?? 0) > 50 ||
+        (item.Evidence ?? []).Any(evidence => (evidence?.Length ?? 0) > 3000)))
+        AddError("experienceEntry", "Each role needs a title of 160 characters or fewer, a period of 120 characters or fewer, and up to 50 evidence lines of 3,000 characters each.");
+
+    if ((profile.Languages ?? []).Any(item =>
+        (item.Language?.Length ?? 0) > 100 || (item.Proficiency?.Length ?? 0) > 160))
+        AddError("languageEntry", "Language names must be 100 characters or fewer and proficiency descriptions 160 characters or fewer.");
+
+    return errors;
+}
+
+static CandidateProfile NormalizeCandidateProfile(CandidateProfile profile)
+{
+    static string Clean(string? value) => value?.Trim() ?? string.Empty;
+    static List<string> CleanList(IEnumerable<string>? values) =>
+        (values ?? []).Select(Clean).Where(value => value.Length > 0).ToList();
+
+    return new CandidateProfile
+    {
+        ProfessionalSummary = Clean(profile.ProfessionalSummary),
+        TargetRoles = CleanList(profile.TargetRoles),
+        ProfessionalSkills = CleanList(profile.ProfessionalSkills),
+        ProjectAndAcademicSkills = CleanList(profile.ProjectAndAcademicSkills),
+        Experience = (profile.Experience ?? [])
+            .Where(item => item is not null)
+            .Select(item => new ExperienceEntry
+            {
+                Role = Clean(item.Role),
+                Period = Clean(item.Period),
+                Evidence = CleanList(item.Evidence)
+            })
+            .Where(item => item.Role.Length > 0 || item.Period.Length > 0 || item.Evidence.Count > 0)
+            .ToList(),
+        Education = CleanList(profile.Education),
+        Languages = (profile.Languages ?? [])
+            .Where(item => item is not null)
+            .Select(item => new LanguageEntry
+            {
+                Language = Clean(item.Language),
+                Proficiency = Clean(item.Proficiency)
+            })
+            .Where(item => item.Language.Length > 0 || item.Proficiency.Length > 0)
+            .ToList(),
+        WorkAuthorization = Clean(profile.WorkAuthorization),
+        Certifications = CleanList(profile.Certifications),
+        Constraints = CleanList(profile.Constraints)
+    };
 }
