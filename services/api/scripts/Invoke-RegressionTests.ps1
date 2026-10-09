@@ -109,45 +109,117 @@ function Test-RequirementGroundedInVacancy {
     return ($missingTokens.Count -eq 0)
 }
 
+function Test-ProfilePlaceholder {
+    param([AllowNull()][string]$Text)
+
+    return [string]::IsNullOrWhiteSpace($Text) -or
+        $Text -match '(?i)replace|placeholder|not specified|not provided|unknown|^tbd$|^n/a$'
+}
+
+function Add-ProfileFactToCatalog {
+    param(
+        [Parameter(Mandatory)][hashtable]$Catalog,
+        [Parameter(Mandatory)][hashtable]$Counters,
+        [Parameter(Mandatory)][string]$Prefix,
+        [Parameter(Mandatory)][string]$Category,
+        [AllowNull()][string]$Text
+    )
+
+    $value = ([string]$Text).Trim()
+    if (Test-ProfilePlaceholder $value) { return }
+
+    if (-not $Counters.ContainsKey($Prefix)) { $Counters[$Prefix] = 0 }
+    $Counters[$Prefix] = [int]$Counters[$Prefix] + 1
+    $id = "{0}-{1:D3}" -f $Prefix, [int]$Counters[$Prefix]
+    $Catalog[$id] = [pscustomobject]@{ Category = $Category; Text = $value }
+}
+
+function New-ProfileFactCatalog {
+    param([Parameter(Mandatory)]$Profile)
+
+    $catalog = @{}
+    $counters = @{}
+
+    Add-ProfileFactToCatalog $catalog $counters "SUM" "professional_summary" ([string]$Profile.professionalSummary)
+    foreach ($skill in @($Profile.professionalSkills)) {
+        Add-ProfileFactToCatalog $catalog $counters "SKL" "professional_skill" ([string]$skill)
+    }
+    foreach ($skill in @($Profile.projectAndAcademicSkills)) {
+        Add-ProfileFactToCatalog $catalog $counters "PRJ" "project_academic_skill" ([string]$skill)
+    }
+    foreach ($experience in @($Profile.experience)) {
+        $isInternship = [string]$experience.role -match '(?i)intern'
+        $prefix = if ($isInternship) { "INT" } else { "EXP" }
+        $category = if ($isInternship) { "internship_experience" } else { "professional_experience" }
+        foreach ($item in @($experience.evidence)) {
+            Add-ProfileFactToCatalog $catalog $counters $prefix $category ([string]$item)
+        }
+    }
+    foreach ($education in @($Profile.education)) {
+        Add-ProfileFactToCatalog $catalog $counters "EDU" "education" ([string]$education)
+    }
+    foreach ($certification in @($Profile.certifications)) {
+        Add-ProfileFactToCatalog $catalog $counters "CER" "certification" ([string]$certification)
+    }
+    foreach ($language in @($Profile.languages)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$language.language)) {
+            Add-ProfileFactToCatalog $catalog $counters "LAN" "language" ("{0}: {1}" -f $language.language, $language.proficiency)
+        }
+    }
+    Add-ProfileFactToCatalog $catalog $counters "AUTH" "work_authorization" ([string]$Profile.workAuthorization)
+
+    return $catalog
+}
+
+function Get-AllowedEvidenceCategories {
+    param([Parameter(Mandatory)][string]$Requirement)
+
+    if ($Requirement -match '(?i)\b(?:work[\s-]+authori[sz]ation|authori[sz]ation[\s-]+to[\s-]+work|right[\s-]+to[\s-]+work|work[\s-]+permit|visa|sponsorship|residence[\s-]+permit|work[\s-]+eligibility)\b') {
+        return @("work_authorization")
+    }
+    if ($Requirement -match '(?i)\b(?:werkstudent|working[\s-]+student|student[\s-]+status|enrol(?:l)?ment|enrolled|university[\s-]+student)\b') {
+        return @("education")
+    }
+    if ($Requirement -match '(?i)\b(?:certification|certificate|credential|licen[cs]e|security[\s-]+clearance)\b') {
+        return @("certification")
+    }
+    if ($Requirement -match '(?i)\b(?:language|German|Deutsch|English|Englisch|CEFR|proficiency|C2|C1|B2|B1|A2|A1)\b') {
+        return @("language")
+    }
+    if ($Requirement -match '(?i)\b(?:professional|commercial|work)\s+experience\b|\b(?:minimum|at\s+least)\s+\d+\s+(?:years?|months?)\b') {
+        return @("professional_summary", "professional_experience")
+    }
+    if ($Requirement -match '(?i)\b(?:experience|experienced|practical|professional|commercial|hands[\s-]+on|worked\s+on)\b') {
+        return @("professional_summary", "professional_experience", "internship_experience")
+    }
+    return @("professional_summary", "professional_skill", "professional_experience", "internship_experience", "project_academic_skill")
+}
+
 function Test-EvidenceGroundedInProfile {
     param(
-        [Parameter(Mandatory)][string]$Evidence,
-        [Parameter(Mandatory)][string[]]$Anchors
+        [Parameter(Mandatory)][string]$Requirement,
+        [Parameter(Mandatory)][string]$EvidenceText,
+        [Parameter(Mandatory)][string[]]$EvidenceIds
     )
 
-    # Evidence is often a concise paraphrase assembled from several profile facts.
-    # Compare its substantive terms with the profile as a whole, rather than requiring
-    # every paraphrase to match one long source sentence word-for-word.
-    $genericEvidenceWords = @(
-        "professional", "practical", "relevant", "commercial", "work", "working",
-        "experience", "experienced", "using", "knowledge", "demonstrated", "hand",
-        "develop", "development", "developing", "developed", "develops",
-        "utilize", "utilized", "utilizing", "utilizes", "candidate"
-    )
+    $ids = @($EvidenceIds | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($ids.Count -eq 0) { return $false }
 
-    $evidenceTokens = @(
-        Get-NormalizedTokens $Evidence |
-            Where-Object { $genericEvidenceWords -notcontains $_ }
-    )
-    if ($evidenceTokens.Count -eq 0) {
-        return $false
+    $facts = @()
+    foreach ($id in $ids) {
+        if (-not $profileFactCatalog.ContainsKey([string]$id)) { return $false }
+        $facts += $profileFactCatalog[[string]$id]
     }
 
-    $profileTokens = @(
-        foreach ($anchor in $Anchors) {
-            Get-NormalizedTokens $anchor
-        }
-    ) | Sort-Object -Unique
+    $allowed = @(Get-AllowedEvidenceCategories -Requirement $Requirement)
+    $relevantFacts = @($facts | Where-Object { $allowed -contains $_.Category })
+    if ($relevantFacts.Count -eq 0 -or $relevantFacts.Count -ne $facts.Count) { return $false }
 
-    # Every substantive evidence term must appear somewhere in the verified profile.
-    # Common phrasing such as "practical experience developing" is excluded above;
-    # technologies, domains, project terms, levels, and quantities remain checkable.
-    $missingTokens = @(
-        $evidenceTokens | Where-Object { $profileTokens -notcontains $_ }
-    )
-
-    return ($missingTokens.Count -eq 0)
+    $expectedEvidence = (@($relevantFacts | ForEach-Object { $_.Text }) -join " ").Trim()
+    return ($EvidenceText.Trim() -ceq $expectedEvidence)
 }
+
+$profileFactCatalog = New-ProfileFactCatalog -Profile $profile
 
 $cases = @(
     [pscustomobject]@{
@@ -306,12 +378,15 @@ function Get-QualityIssues {
             $issues.Add("UNSUPPORTED_MATCH: '$requirement' contains terms not grounded in the vacancy text.")
         }
 
-        if ($evidence.Length -lt 24) {
-            $issues.Add("WEAK_EVIDENCE: '$requirement' evidence is too short to explain the profile support: '$evidence'")
+        $evidenceIds = @($match.evidenceIds)
+        if (-not (Test-EvidenceGroundedInProfile -Requirement $requirement -EvidenceText $evidence -EvidenceIds $evidenceIds)) {
+            $issues.Add("UNSUPPORTED_EVIDENCE: '$requirement' did not cite valid profile facts of an allowed category, or rendered evidence did not match those facts.")
         }
+    }
 
-        if (-not (Test-EvidenceGroundedInProfile -Evidence $evidence -Anchors $profileAnchors)) {
-            $issues.Add("UNSUPPORTED_EVIDENCE: '$requirement' evidence did not substantially overlap with a known skill/profile evidence anchor: '$evidence'")
+    foreach ($warning in @($Result.evidenceValidationWarnings)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$warning)) {
+            $issues.Add("EVIDENCE_VALIDATION_WARNING: '$warning'")
         }
     }
 
