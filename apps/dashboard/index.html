@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f5f7fb" />
+    <title>JobPilot — Job Search Dashboard</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="JobPilot dashboard home">
+          <span class="brand-icon">J</span>
+          <span><strong>JobPilot</strong><small>PERSONAL JOB SEARCH</small></span>
+        </a>
+        <nav class="nav-list" aria-label="Main navigation">
+          <a class="nav-item active" href="#overview"><span class="nav-glyph">⌂</span> Overview</a>
+          <a class="nav-item" href="#saved-jobs"><span class="nav-glyph">▤</span> Saved jobs</a>
+          <a class="nav-item" href="#new-analysis"><span class="nav-glyph">✦</span> Analyse a job</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="connection-dot"></div>
+          <div><strong>Local API</strong><small id="api-status">Checking connection…</small></div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">YOUR CAREER WORKSPACE</p>
+            <h1>Job search dashboard</h1>
+            <p class="subheading">Find your strongest matches and keep every application organised.</p>
+          </div>
+          <button id="refresh-button" class="button button-secondary" type="button">↻ Refresh</button>
+        </header>
+
+        <section id="overview" class="stats-grid" aria-label="Job search statistics">
+          <article class="stat-card"><span class="stat-label">Jobs analysed</span><strong id="stat-total">—</strong><small>Saved in your history</small></article>
+          <article class="stat-card"><span class="stat-label">Strong matches</span><strong id="stat-strong">—</strong><small>Score of 80 or higher</small></article>
+          <article class="stat-card"><span class="stat-label">Applications sent</span><strong id="stat-applied">—</strong><small>Currently in progress</small></article>
+          <article class="stat-card"><span class="stat-label">Interviews</span><strong id="stat-interviews">—</strong><small>Keep preparing</small></article>
+        </section>
+
+        <div class="content-grid">
+          <section id="new-analysis" class="panel analysis-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">AI JOB MATCH</p><h2>Analyse a new job</h2></div>
+              <span class="sparkle-mark">✦</span>
+            </div>
+            <p class="muted panel-intro">Paste a job description. DBot will compare it with your profile and automatically save the result.</p>
+
+            <form id="analyze-form" class="form-stack">
+              <div class="field-row">
+                <div class="field">
+                  <label for="job-title">Job title <span>(optional)</span></label>
+                  <input id="job-title" name="jobTitle" maxlength="160" placeholder="e.g. .NET Developer" />
+                </div>
+                <div class="field">
+                  <label for="company">Company <span>(optional)</span></label>
+                  <input id="company" name="company" maxlength="160" placeholder="e.g. Example GmbH" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="job-description">Job description</label>
+                <textarea id="job-description" name="jobDescription" rows="7" minlength="40" maxlength="20000" required placeholder="Paste the full job description here…"></textarea>
+                <small class="field-hint">At least 40 characters. English and German descriptions are supported.</small>
+              </div>
+              <div id="form-message" class="form-message" role="status" hidden></div>
+              <button id="analyze-button" class="button button-primary" type="submit"><span>✦</span><span id="analyze-button-label">Analyse & save job</span></button>
+            </form>
+            <p class="privacy-note">Your job description and configured candidate profile are sent to your AI provider for analysis. Keep API keys on the server, and avoid unnecessary personal identifiers in your profile.</p>
+          </section>
+
+          <section id="saved-jobs" class="panel jobs-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">YOUR PIPELINE</p><h2>Saved jobs</h2></div>
+              <span id="job-count" class="count-pill">0 jobs</span>
+            </div>
+            <div class="toolbar">
+              <label class="search-box"><span aria-hidden="true">⌕</span><input id="job-search" type="search" placeholder="Search roles or companies…" aria-label="Search saved jobs" /></label>
+              <select id="status-filter" aria-label="Filter by application status">
+                <option value="All">All statuses</option>
+                <option value="Saved">Saved</option>
+                <option value="Applied">Applied</option>
+                <option value="Interview">Interview</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Offer">Offer</option>
+              </select>
+            </div>
+            <div id="jobs-list" class="jobs-list" aria-live="polite">
+              <div class="loading-state">Loading your saved jobs…</div>
+            </div>
+            <div id="empty-state" class="empty-state" hidden>
+              <div class="empty-icon">▤</div>
+              <h3>Your job list starts here</h3>
+              <p>Analyse a role above or use DBot in Chrome. Successful analyses appear here automatically.</p>
+              <a href="#new-analysis" class="text-link">Analyse your first job →</a>
+            </div>
+          </section>
+        </div>
+
+        <section id="job-details" class="panel details-panel" hidden>
+          <div class="panel-heading details-heading">
+            <div><p class="eyebrow">JOB DETAILS</p><h2 id="detail-title">Selected role</h2><p id="detail-company" class="muted"></p></div>
+            <button id="close-details" class="icon-button" type="button" aria-label="Close job details">×</button>
+          </div>
+          <div class="detail-summary-grid">
+            <div class="fit-card"><span class="stat-label">Fit score</span><strong id="detail-score">—</strong><div class="score-track"><span id="detail-score-bar"></span></div><span id="detail-recommendation" class="recommendation-pill review">Review</span></div>
+            <div class="role-summary"><h3>Role summary</h3><p id="detail-role-summary" class="muted"></p><h3>Overall assessment</h3><p id="detail-assessment" class="assessment-copy"></p></div>
+          </div>
+          <div class="detail-sections">
+            <section class="detail-section"><h3>Matched requirements</h3><ul id="detail-matches" class="detail-list"></ul></section>
+            <section class="detail-section"><h3>Gaps to consider</h3><ul id="detail-gaps" class="detail-list"></ul></section>
+            <section class="detail-section"><h3>Questions to verify</h3><ul id="detail-questions" class="detail-list"></ul></section>
+          </div>
+          <section class="application-editor">
+            <div><p class="eyebrow">APPLICATION TRACKER</p><h3>Keep this application up to date</h3></div>
+            <form id="application-form" class="application-form">
+              <div class="field"><label for="application-status">Status</label><select id="application-status"><option>Saved</option><option>Applied</option><option>Interview</option><option>Rejected</option><option>Offer</option></select></div>
+              <div class="field notes-field"><label for="job-notes">Notes</label><textarea id="job-notes" rows="3" maxlength="4000" placeholder="Recruiter, deadline, follow-up date…"></textarea></div>
+              <div id="save-message" class="form-message" role="status" hidden></div>
+              <button id="save-job-button" class="button button-primary" type="submit">Save changes</button>
+            </form>
+          </section>
+          <details class="description-disclosure"><summary>View original job description</summary><pre id="detail-description"></pre></details>
+        </section>
+
+        <footer class="page-footer"><span>JOBPILOT AI</span><span>Personal job search workspace · AI scores are estimates, not hiring guarantees</span></footer>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
