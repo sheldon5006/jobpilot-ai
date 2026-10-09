@@ -66,6 +66,17 @@ interface FetchResponse {
 const API_BASE_URL = "http://127.0.0.1:5080";
 const ALL_HTTP_ORIGINS = ["http://*/*", "https://*/*"];
 const autoAnalyzedUrls = new Set<string>();
+const autoAnalysisCacheReady: Promise<void> = chrome.storage.session
+  .get("dbotAutoAnalyzedUrls")
+  .then(values => {
+    const cached = values["dbotAutoAnalyzedUrls"];
+    if (Array.isArray(cached)) {
+      cached.filter((value): value is string => typeof value === "string").forEach(value => autoAnalyzedUrls.add(value));
+    }
+  })
+  .catch(() => {
+    // Session storage is only a deduplication convenience; analysis remains available without it.
+  });
 let settings: DbotSettings = { autoFetchEnabled: false, autoAnalyzeEnabled: false };
 
 function element<T extends HTMLElement>(selector: string): T {
@@ -366,12 +377,18 @@ async function applyDetectedJob(
   );
 
   const analysisKey = job.url;
+  await autoAnalysisCacheReady;
   if (shouldAutoAnalyze && !autoAnalyzedUrls.has(analysisKey)) {
     if (job.description.trim().length < 40) {
       setPageStatus("Job details were found, but the description is too short to analyse. Review it or paste more text.", "error");
       return;
     }
+    // Remember in the current browser session to avoid duplicate Gemini calls if
+    // the panel receives the same page event twice or is reopened.
     autoAnalyzedUrls.add(analysisKey);
+    await chrome.storage.session.set({
+      dbotAutoAnalyzedUrls: Array.from(autoAnalyzedUrls).slice(-100)
+    }).catch(() => undefined);
     await analyzeCurrentJob();
   } else if (source === "auto") {
     // The details have been filled without silently submitting anything to the AI provider.
