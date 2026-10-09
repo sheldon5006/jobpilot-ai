@@ -83,7 +83,7 @@ After those checks, the backend applies deterministic deductions to distinct gap
 - Total deduction is capped at 60 points; the final score is constrained to 0–100.
 - Duplicate gap requirements are counted once, using the highest applicable deduction.
 - A clearly unmet must-have requirement forces `Skip`; an unverified must-have requirement forces `Review`. Preferred gaps do not block `Apply` by themselves.
-- When one or more mandatory requirements are explicitly unmet, the final fit score is normalised to 20/100 for one unmet gate, 10/100 for two, and 0/100 for three or more. This makes hard-gate scores stable across model runs; the rationale still reports the model's initial estimate.
+- The fit score remains an estimate after transparent gap deductions; it is not forced to an arbitrary fixed score when a mandatory requirement fails. The response separately exposes mandatoryRequirementsStatus as Not met, Needs verification, or No unresolved mandatory gaps. A mandatory Unmet condition forces Skip; a mandatory Unverified condition forces Review.
 - A language gap is only scored when the vacancy explicitly states that language as required or preferred. The job ad is not evidence of the candidate's language proficiency.
 
 These weights are a transparent heuristic, not a statistically validated probability of receiving an interview or offer. Evaluate them against labelled vacancies before treating scores as predictive.
@@ -125,11 +125,17 @@ Start the API locally and configure the provider you want to evaluate in `appset
 .\services\api\scripts\Invoke-RegressionTests.ps1
 ```
 
-The script tests seven scenarios: a strong technical match, preferred German, mandatory German C2, explicit work-authorisation/sponsorship conditions, a mandatory AWS certification, current enrolment for a Werkstudent role, and a minimum-experience threshold. Eligibility cases adapt to the verified facts in the local profile. It checks recommendations and gaps, allows only expected targeted verification questions, verifies matched requirements against vacancy text, checks evidence against profile facts, and validates the score-calibration explanation. Evidence validation compares substantive terms across the full set of verified profile anchors, so concise paraphrases can combine related facts while each concrete term must still be present in the profile.
+The script tests seven scenarios: a strong technical match, preferred German, mandatory German C2, explicit work-authorisation/sponsorship conditions, a mandatory AWS certification, current enrolment for a Werkstudent role, and a minimum-experience threshold. Eligibility cases adapt to the verified facts in the local profile. It checks recommendations and gaps, allows only expected targeted verification questions, verifies matched requirements against vacancy text, checks evidence IDs against the local profile-fact catalog, ensures the displayed evidence text matches those facts, and validates the score-calibration explanation. The API exposes mandatoryRequirementsStatus separately from the fit score and emits evidenceValidationWarnings if an AI-generated match cannot be grounded.
 
 By default, it makes two extra calls for each of the first three scenarios to check score stability. It fails if repeated scores differ by more than 10 points. Skip the extra calls with `-SkipScoreStability`, or choose another tolerance with `-ScoreTolerance 15`.
 
 The local candidate profile supports `workAuthorization` (an accurate, country-specific right-to-work/sponsorship statement) and `certifications` (exact credentials and validity details). Leave either unknown until you can verify it; never invent these values.
+
+Backend rule and evidence tests can be run from the repository root:
+
+```powershell
+dotnet test .\services\api.tests\JobPilot.Api.Tests.csproj
+```
 
 The regression script retries HTTP 502/503/504 responses twice by default (three total attempts) with short backoff delays. Use `-TransientRetries 0` to disable these extra attempts or set `-TransientRetries 3` for up to three retries. HTTP 429 rate-limit responses are not immediately retried; the script reports affected scenarios or stability checks as **INCONCLUSIVE** instead of presenting a quota limit as a rule failure or a passing test.
 
