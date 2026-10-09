@@ -33,6 +33,10 @@ public static class JobRequirementRuleEngine
         @"\b(?:employment\s+(?:(?:start|end)\s+)?dates?|exact\s+(?:employment\s+)?dates?|dates?\s+for\s+(?:the\s+)?[\w.-]+\s+roles?)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex WorkAuthorizationTopic = new(
+        @"\b(?:work\s+authori[sz]ation|right\s+to\s+work|work\s+permit|visa|sponsorship|residence\s+permit|eligible\s+to\s+work|legally\s+entitled\s+to\s+work)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public static void Apply(
         JobAnalysisRequest request,
         CandidateProfile profile,
@@ -63,20 +67,44 @@ public static class JobRequirementRuleEngine
         JobAnalysisResult result)
     {
         // Missing employment dates are not a job-fit gap unless the vacancy makes a duration
-        // requirement explicit. This prevents irrelevant profile placeholders from reducing a score.
-        if (ExplicitExperienceDuration.IsMatch(vacancyText))
+        // requirement explicit. Keep this independent from other eligibility checks.
+        if (!ExplicitExperienceDuration.IsMatch(vacancyText))
         {
-            return;
+            result.Gaps.RemoveAll(gap =>
+                gap is not null && EmploymentMetadataGap.IsMatch(gap.Requirement ?? string.Empty));
+
+            result.QuestionsToVerify.RemoveAll(question =>
+                EmploymentMetadataQuestion.IsMatch(question));
+
+            result.Summary = RemoveIrrelevantEmploymentMetadataSentences(result.Summary);
+            result.Rationale = RemoveIrrelevantEmploymentMetadataSentences(result.Rationale);
         }
 
-        result.Gaps.RemoveAll(gap =>
-            gap is not null && EmploymentMetadataGap.IsMatch(gap.Requirement ?? string.Empty));
+        // Do not invent work-authorisation checks. They are relevant only when the vacancy
+        // mentions visas, sponsorship, permits, or an explicit right-to-work condition.
+        if (!WorkAuthorizationTopic.IsMatch(vacancyText))
+        {
+            result.Gaps.RemoveAll(gap =>
+                gap is not null && WorkAuthorizationTopic.IsMatch(gap.Requirement ?? string.Empty));
 
-        result.QuestionsToVerify.RemoveAll(question =>
-            EmploymentMetadataQuestion.IsMatch(question));
+            result.QuestionsToVerify.RemoveAll(question =>
+                WorkAuthorizationTopic.IsMatch(question));
 
-        result.Summary = RemoveIrrelevantEmploymentMetadataSentences(result.Summary);
-        result.Rationale = RemoveIrrelevantEmploymentMetadataSentences(result.Rationale);
+            result.Summary = RemoveSentencesMentioningWorkAuthorization(result.Summary);
+            result.Rationale = RemoveSentencesMentioningWorkAuthorization(result.Rationale);
+        }
+    }
+
+    private static string RemoveSentencesMentioningWorkAuthorization(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        return string.Join(" ", sentences.Where(sentence =>
+            !WorkAuthorizationTopic.IsMatch(sentence))).Trim();
     }
 
     private static string RemoveIrrelevantEmploymentMetadataSentences(string? text)
