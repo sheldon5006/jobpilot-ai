@@ -92,11 +92,17 @@ public static class ProfileEvidenceCatalog
                 continue;
             }
 
+            var proficiency = language.Proficiency?.Trim() ?? string.Empty;
+            if (IsPlaceholder(proficiency))
+            {
+                continue;
+            }
+
             Add(
                 "LAN",
                 "language",
                 "Languages",
-                $"{language.Language.Trim()}: {language.Proficiency?.Trim()}");
+                $"{language.Language.Trim()}: {proficiency}");
         }
 
         Add("AUTH", "work_authorization", "Work authorization", profile.WorkAuthorization);
