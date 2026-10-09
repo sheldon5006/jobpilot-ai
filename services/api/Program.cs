@@ -4,6 +4,9 @@ using JobPilot.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Local-only settings file. Keep appsettings.Local.json untracked; never commit real API keys.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("LocalDbotExtension", policy =>
@@ -128,11 +131,12 @@ static async Task<IResult> AnalyzeJobAsync(
             statusCode: StatusCodes.Status409Conflict);
     }
 
-    if (string.IsNullOrWhiteSpace(configuration["GEMINI_API_KEY"]))
+    if (string.IsNullOrWhiteSpace(configuration["Gemini:ApiKey"]) &&
+        string.IsNullOrWhiteSpace(configuration["GEMINI_API_KEY"]))
     {
         return Results.Problem(
             title: "Gemini API key is not configured",
-            detail: "Set GEMINI_API_KEY in the current PowerShell session before starting the API. The key belongs on the backend and must not be added to the extension or committed to Git.",
+            detail: "Add your key to services/api/appsettings.Local.json under Gemini:ApiKey, or set GEMINI_API_KEY in the environment. Never commit the real key to Git.",
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
