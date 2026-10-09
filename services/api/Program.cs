@@ -33,7 +33,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddHttpClient<GeminiAnalysisService>(client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(60);
+    client.Timeout = TimeSpan.FromSeconds(90);
 });
 
 var app = builder.Build();
