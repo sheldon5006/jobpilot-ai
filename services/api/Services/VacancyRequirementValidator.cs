@@ -22,6 +22,10 @@ public static class VacancyRequirementValidator
         @"\b(?:certification|certificate|certified|credential|licen[cs]e|security[\s-]+clearance|forklift[\s-]+licen[cs]e)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex LanguageTopic = new(
+        @"\b(?:German|Deutsch(?:kenntnisse)?|English|Englisch(?:kenntnisse)?|CEFR|proficiency|language)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex SecurityClearanceTopic = new(
         @"\bsecurity[\s-]+clearance\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -125,6 +129,7 @@ public static class VacancyRequirementValidator
         var isWorkAuthorization = WorkAuthorizationTopic.IsMatch(text);
         var isStudentRequirement = StudentTopic.IsMatch(text);
         var isCredentialRequirement = CredentialTopic.IsMatch(text);
+        var isLanguageRequirement = LanguageTopic.IsMatch(text);
         var isSecurityClearance = SecurityClearanceTopic.IsMatch(text);
 
         var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -157,12 +162,18 @@ public static class VacancyRequirementValidator
                 continue;
             }
 
+            if (isLanguageRequirement && (token is "language" or "proficiency"))
+            {
+                continue;
+            }
+
             tokens.Add(token);
         }
 
         if (isWorkAuthorization) tokens.Add("__topic_work_authorization");
         if (isStudentRequirement) tokens.Add("__topic_student_status");
         if (isCredentialRequirement) tokens.Add("__topic_credential");
+        if (isLanguageRequirement) tokens.Add("__topic_language");
         if (isSecurityClearance) tokens.Add("__topic_security_clearance");
         return tokens;
     }
