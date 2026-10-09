@@ -1,6 +1,9 @@
 interface JobAnalysisResult {
   recommendation: "Apply" | "Review" | "Skip" | string;
   matchScore: number;
+  englishSummary?: string;
+  matchedRequirements?: Array<{ requirement?: string }>;
+  gaps?: Array<{ requirement?: string; severity?: string; status?: string }>;
 }
 
 interface ApiProblem {
@@ -74,7 +77,8 @@ const resultTitle = element<HTMLElement>("#result-title");
 const resultEyebrow = element<HTMLElement>("#result-eyebrow");
 const resultIcon = element<HTMLElement>("#result-icon");
 const matchScore = element<HTMLElement>("#match-score");
-const roleLanguages = element<HTMLElement>("#role-languages");
+const englishSummary = element<HTMLElement>("#english-summary");
+const keyRequirementsList = element<HTMLUListElement>("#key-requirements-list");
 const resultCopy = element<HTMLElement>("#result-copy");
 
 const togglePageToolsButton = element<HTMLButtonElement>("#toggle-page-tools-button");
@@ -89,28 +93,43 @@ function setPageStatus(message: string, kind: "info" | "success" | "error" = "in
   pageFetchStatus.className = `page-fetch-status ${kind}`;
 }
 
-function detectRoleLanguages(description: string): string[] {
-  const text = description.normalize("NFKC");
-  const requirementCue = /\b(?:language|languages|skills?|proficiency|fluency|knowledge|spoken|written|speaking|speak|fluent|good|very good|excellent|native|professional|advanced|intermediate|basic|required|requirement|must|level|c1|c2|b1|b2|a1|a2|communication|plus|advantage|preferred|desirable|kenntnisse|sprachkenntnisse|sprachniveau|verhandlungssicher|fliessend|fließend|gute|gut|wünschenswert|vorteil)\b/i;
+function renderKeyRequirements(result: JobAnalysisResult): void {
+  keyRequirementsList.replaceChildren();
 
-  const requirementMentioned = (languagePattern: RegExp): boolean => {
-    let match: RegExpExecArray | null;
-    while ((match = languagePattern.exec(text)) !== null) {
-      const start = Math.max(0, match.index - 75);
-      const end = Math.min(text.length, match.index + match[0].length + 75);
-      if (requirementCue.test(text.slice(start, end))) return true;
-    }
-    return false;
-  };
+  const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+  const matched = Array.isArray(result.matchedRequirements) ? result.matchedRequirements : [];
+  const priorityGaps = gaps.filter(item => item.severity?.toLowerCase() === "must-have");
+  const candidates = [
+    ...priorityGaps,
+    ...matched,
+    ...gaps.filter(item => item.severity?.toLowerCase() !== "must-have")
+  ];
 
-  const detected: string[] = [];
-  if (requirementMentioned(/\b(?:german|deutsch(?:kenntnisse|kenntnissen|kenntnis|sprachkenntnisse|sprachkenntnis)?)\b/gi)) {
-    detected.push("DE");
+  const seen = new Set<string>();
+  const requirements: string[] = [];
+  for (const candidate of candidates) {
+    const requirement = String(candidate.requirement || "").replace(/\\s+/g, " ").trim();
+    const key = requirement.toLocaleLowerCase();
+    if (!requirement || seen.has(key)) continue;
+    seen.add(key);
+    requirements.push(requirement);
+    if (requirements.length >= 6) break;
   }
-  if (requirementMentioned(/\b(?:english|englisch(?:kenntnisse|kenntnissen|kenntnis|sprachkenntnisse|sprachkenntnis)?)\b/gi)) {
-    detected.push("EN");
+
+  if (requirements.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "requirement-chip empty-requirement";
+    empty.textContent = "No specific requirements detected";
+    keyRequirementsList.append(empty);
+    return;
   }
-  return detected;
+
+  for (const requirement of requirements) {
+    const chip = document.createElement("li");
+    chip.className = "requirement-chip";
+    chip.textContent = requirement;
+    keyRequirementsList.append(chip);
+  }
 }
 
 function setPageToolsCollapsed(collapsed: boolean): void {
@@ -125,12 +144,9 @@ function renderAnalysis(result: JobAnalysisResult): void {
   resultTitle.textContent = "Overall assessment";
   resultIcon.textContent = strongFit ? "✓" : "×";
   matchScore.textContent = `${Math.max(0, Math.min(100, Math.round(result.matchScore || 0)))} / 100`;
-  const languages = detectRoleLanguages(descriptionInput.value);
-  roleLanguages.textContent = languages.join(", ") || "—";
-  roleLanguages.setAttribute(
-    "aria-label",
-    languages.length === 0 ? "Role languages not specified" : `Role languages: ${languages.join(", ")}`
-  );
+  englishSummary.textContent = result.englishSummary?.trim()
+    || "An English role summary was not returned. Review the job description above.";
+  renderKeyRequirements(result);
   resultCopy.textContent = strongFit ? "Strong fit" : "Not a strong fit";
   resultCopy.className = `result-copy fit-verdict ${strongFit ? "strong-fit" : "not-strong-fit"}`;
   resultPanel.classList.remove("error-state");
@@ -143,8 +159,8 @@ function renderError(message: string): void {
   resultTitle.textContent = "Analysis failed";
   resultIcon.textContent = "!";
   matchScore.textContent = "--";
-  roleLanguages.textContent = "—";
-  roleLanguages.setAttribute("aria-label", "Role languages not available");
+  englishSummary.textContent = "The role summary is unavailable because the analysis did not complete.";
+  keyRequirementsList.replaceChildren();
   resultCopy.textContent = message;
   resultCopy.className = "result-copy fit-verdict error-copy";
   resultPanel.hidden = false;
