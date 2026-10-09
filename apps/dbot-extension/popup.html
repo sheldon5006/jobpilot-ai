@@ -15,18 +15,18 @@
           <p class="eyebrow">JOBPILOT AI</p>
           <h1>DBot <span>Job Assistant</span></h1>
         </div>
-        <span class="version-tag">0.1.0</span>
+        <span class="version-tag">0.2.0</span>
       </header>
 
       <section class="intro" aria-labelledby="intro-title">
-        <p class="eyebrow">JOB ANALYSIS</p>
+        <p class="eyebrow">AI JOB ANALYSIS</p>
         <h2 id="intro-title">Is this role right for you?</h2>
-        <p>Start with a job description. DBot will help you assess the fit against your experience.</p>
+        <p>DBot compares the job requirements against your configured candidate profile and explains the fit.</p>
       </section>
 
       <form id="job-form">
         <label for="job-title">Job title <span class="optional">(optional)</span></label>
-        <input id="job-title" name="jobTitle" type="text" maxlength="160" placeholder="e.g. Working Student — Software Development" />
+        <input id="job-title" name="jobTitle" type="text" maxlength="160" placeholder="e.g. Werkstudent — Software Development" />
 
         <label for="company">Company <span class="optional">(optional)</span></label>
         <input id="company" name="company" type="text" maxlength="160" placeholder="e.g. Example GmbH" />
@@ -37,32 +37,68 @@
           name="jobDescription"
           rows="8"
           minlength="40"
+          maxlength="20000"
           required
           placeholder="Paste the job description here…"
         ></textarea>
-        <p class="field-hint">For this first prototype, paste the description manually. Page reading and AI analysis will be added in later milestones.</p>
+        <p class="field-hint">Paste the full description for the best result. German descriptions are supported.</p>
+
+        <div class="privacy-note">
+          <strong>Before analysis:</strong> When you click Analyze, the job description and the candidate profile configured in the local API are sent to Google's Gemini API. Google may use free-tier content to improve its products. Keep personal identifiers out of the profile.
+        </div>
 
         <button id="analyze-button" class="primary-button" type="submit">
           <span aria-hidden="true">✦</span>
-          Prepare analysis
+          <span id="button-label">Analyze job fit</span>
         </button>
       </form>
 
       <section id="result" class="result-panel" aria-live="polite" hidden>
         <div class="result-heading">
-          <span class="result-icon" aria-hidden="true">✓</span>
-          <div>
-            <p class="eyebrow">INPUT CHECK</p>
-            <h2 id="result-title">Description captured</h2>
+          <span id="result-icon" class="result-icon" aria-hidden="true">✦</span>
+          <div class="result-heading-copy">
+            <p class="eyebrow" id="result-eyebrow">AI ASSESSMENT</p>
+            <h2 id="result-title">Analysis result</h2>
+          </div>
+          <span id="recommendation-pill" class="recommendation-pill">Review</span>
+        </div>
+
+        <div class="score-summary">
+          <div class="score-card">
+            <strong id="match-score">--</strong>
+            <span>Fit score</span>
+          </div>
+          <div class="english-summary">
+            <h3>Role summary</h3>
+            <p id="english-summary"></p>
           </div>
         </div>
-        <p id="result-copy"></p>
+
+        <h3>Overall assessment</h3>
+        <p id="result-copy" class="result-copy"></p>
+
+        <section class="result-section">
+          <h3>Matched requirements</h3>
+          <ul id="matches-list" class="result-list"></ul>
+        </section>
+
+        <section class="result-section">
+          <h3>Gaps to consider</h3>
+          <ul id="gaps-list" class="result-list"></ul>
+        </section>
+
+        <section class="result-section">
+          <h3>Questions to verify</h3>
+          <ul id="questions-list" class="result-list"></ul>
+        </section>
+
         <p id="result-meta" class="result-meta"></p>
+        <p class="result-disclaimer">The fit score is an estimate, not an interview probability. Review the evidence before deciding. No application is submitted by DBot.</p>
       </section>
 
       <footer>
         <span class="status-dot" aria-hidden="true"></span>
-        <span>Prototype · No data is sent or saved yet</span>
+        <span>Local API · Runs only when you click Analyze · No application submission</span>
       </footer>
     </main>
     <script type="module" src="/src/popup.ts"></script>
