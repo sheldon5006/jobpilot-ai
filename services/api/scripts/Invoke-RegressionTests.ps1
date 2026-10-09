@@ -654,6 +654,7 @@ function Test-ExpectedScenario {
 $summary = [System.Collections.Generic.List[object]]::new()
 $allIssues = [System.Collections.Generic.List[string]]::new()
 $inconclusiveIssues = [System.Collections.Generic.List[string]]::new()
+$haltAfterProviderFailure = $false
 $scoreSamples = @{}
 foreach ($case in $cases) {
     $scoreSamples[$case.Name] = [System.Collections.Generic.List[int]]::new()
@@ -679,6 +680,8 @@ foreach ($case in $cases) {
             })
             $inconclusiveIssues.Add("$($case.Name): $providerStatus; scenario could not be evaluated. Detail: $($call.Error)")
             Write-Host "$providerStatus; this scenario is inconclusive, not a rule failure. Detail: $($call.Error)" -ForegroundColor Yellow
+            $haltAfterProviderFailure = $true
+            break
         } else {
             $summary.Add([pscustomobject]@{
                 Test = $case.Name
@@ -726,6 +729,23 @@ foreach ($case in $cases) {
         Gaps = @($result.gaps).Count
         Seconds = $call.Seconds
     })
+}
+
+if ($haltAfterProviderFailure) {
+    $reportedNames = @($summary | ForEach-Object { $_.Test })
+    foreach ($remainingCase in $cases) {
+        if ($reportedNames -notcontains $remainingCase.Name) {
+            $summary.Add([pscustomobject]@{
+                Test = $remainingCase.Name
+                Status = "NOT RUN"
+                Recommendation = ""
+                Score = $null
+                Gaps = $null
+                Seconds = $null
+            })
+        }
+    }
+    $inconclusiveIssues.Add("Remaining scenarios were not called because the provider returned a shared transient/quota failure. Rerun after checking the provider detail above.")
 }
 
 $coreScenariosReady = $summary.Count -ge 3 -and
