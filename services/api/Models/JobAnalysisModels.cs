@@ -34,5 +34,10 @@ public sealed class RequirementGap
 {
     public string Requirement { get; set; } = string.Empty;
     public string Severity { get; set; } = "Unknown";
+
+    // Unverified means the profile does not establish the requirement.
+    // Unmet means the profile explicitly conflicts with the requirement.
+    public string Status { get; set; } = "Unverified";
+
     public string Explanation { get; set; } = string.Empty;
 }
