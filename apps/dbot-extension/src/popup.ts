@@ -2,6 +2,8 @@ interface JobAnalysisResult {
   recommendation: "Apply" | "Review" | "Skip" | string;
   matchScore: number;
   englishSummary?: string;
+  keyRequirements?: string[];
+  candidateExpectations?: string[];
   matchedRequirements?: Array<{ requirement?: string }>;
   gaps?: Array<{ requirement?: string; severity?: string; status?: string }>;
 }
@@ -80,6 +82,7 @@ const resultIcon = element<HTMLElement>("#result-icon");
 const matchScore = element<HTMLElement>("#match-score");
 const englishSummary = element<HTMLElement>("#english-summary");
 const keyRequirementsList = element<HTMLUListElement>("#key-requirements-list");
+const candidateExpectationsList = element<HTMLUListElement>("#candidate-expectations-list");
 const resultCopy = element<HTMLElement>("#result-copy");
 
 const togglePageToolsButton = element<HTMLButtonElement>("#toggle-page-tools-button");
@@ -94,22 +97,89 @@ function setPageStatus(message: string, kind: "info" | "success" | "error" = "in
   pageFetchStatus.className = `page-fetch-status ${kind}`;
 }
 
+function normalizeRequirement(value: unknown): string {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function inferExplicitRequirements(description: string): string[] {
+  const text = description.normalize("NFKC");
+  const inferred: string[] = [];
+
+  // The model's ranking can overlook language criteria. Promote them directly
+  // from the vacancy text when both languages are named in a requirements context.
+  const mentionsGerman = /\b(?:deutsch(?:kenntnisse|kenntnis)?|german)\b/i.test(text);
+  const mentionsEnglish = /\b(?:englisch(?:kenntnisse|kenntnis)?|english)\b/i.test(text);
+  const hasLanguageCue = /\b(?:kenntnisse|sprachkenntnisse|languages?|proficiency|fluency|fluent|spoken|written|speaking|communication|wort und schrift)\b/i.test(text);
+  if (mentionsGerman && mentionsEnglish && hasLanguageCue) {
+    const veryGood = /sehr gute.{0,55}(?:deutsch|german)|(?:deutsch|german).{0,70}(?:englisch|english).{0,35}(?:wort und schrift|written|spoken)/i.test(text);
+    inferred.push(veryGood
+      ? "Very good German and English, spoken and written"
+      : "German and English language skills");
+  } else {
+    if (mentionsGerman && /\b(?:kenntnisse|sprachkenntnisse|language|spoken|written|fließend|fliessend|verhandlungssicher)\b/i.test(text)) {
+      inferred.push("German language skills");
+    }
+    if (mentionsEnglish && /\b(?:kenntnisse|sprachkenntnisse|language|spoken|written|fluent|proficiency)\b/i.test(text)) {
+      inferred.push("English language skills");
+    }
+  }
+
+  if (/mindestens.{0,25}(?:1|ein)\s+jahr.{0,40}(?:immatrikuliert|eingeschrieben|enrolled)|(?:enrolled|enrolment|enrollment).{0,70}(?:at least|minimum).{0,25}(?:1|one)\s+year/i.test(text)) {
+    inferred.push("Remain enrolled at university for at least one more year");
+  }
+
+  const hoursRange = /\b14\s*h\s*[-–]\s*20\s*h\b|\b14\s*(?:-|–|bis|to)\s*20\s*(?:hours|stunden)\b/i.test(text);
+  const twoOrThreeDays = /\b2\s*[-–]\s*3\s*(?:days|tage|days per week|tagen)\b/i.test(text)
+    || /\ban\s+2\s*[-–]\s*3\s+days\b/i.test(text);
+  if (hoursRange) {
+    inferred.push(twoOrThreeDays
+      ? "Available 14–20 hours per week across 2–3 weekdays"
+      : "Available 14–20 hours per week");
+  }
+
+  if (/\b(?:vor ort|on.?site|in the office|im büro|im buero)\b/i.test(text)) {
+    if (/\b(?:köln|cologne)\b/i.test(text)) {
+      inferred.push(twoOrThreeDays
+        ? "Available to work on-site in Cologne 2–3 weekdays"
+        : "Available to work on-site in Cologne");
+    } else {
+      inferred.push("Available for on-site work");
+    }
+  }
+
+  if (/\bsorgfältig\b|\bstrukturiert\b|\bcareful(?:ly)?\b|\bstructured\b/i.test(text)) {
+    inferred.push("Careful, structured working style");
+  }
+  if (/\bteamarbeit\b|\bteamwork\b|\bkommunikationsfähigkeiten\b|\bkommunikationsfähigkeit\b|\bcommunication skills\b/i.test(text)) {
+    inferred.push("Teamwork and strong communication");
+  }
+  if (/\b(?:mobile trends|mobile apps|new apps|neue apps|technische geräte|technische geräte|technical devices|technical equipment)\b/i.test(text)) {
+    inferred.push("Interest in apps/mobile technology and confidence with devices");
+  }
+
+  return inferred;
+}
+
 function renderKeyRequirements(result: JobAnalysisResult): void {
   keyRequirementsList.replaceChildren();
 
+  const inferred = inferExplicitRequirements(descriptionInput.value);
+  const modelRequirements = Array.isArray(result.keyRequirements) ? result.keyRequirements : [];
   const gaps = Array.isArray(result.gaps) ? result.gaps : [];
   const matched = Array.isArray(result.matchedRequirements) ? result.matchedRequirements : [];
   const priorityGaps = gaps.filter(item => item.severity?.toLowerCase() === "must-have");
   const candidates = [
-    ...priorityGaps,
-    ...matched,
-    ...gaps.filter(item => item.severity?.toLowerCase() !== "must-have")
+    ...inferred,
+    ...modelRequirements,
+    ...priorityGaps.map(item => item.requirement),
+    ...matched.map(item => item.requirement),
+    ...gaps.filter(item => item.severity?.toLowerCase() !== "must-have").map(item => item.requirement)
   ];
 
   const seen = new Set<string>();
   const requirements: string[] = [];
   for (const candidate of candidates) {
-    const requirement = String(candidate.requirement || "").replace(/\s+/g, " ").trim();
+    const requirement = normalizeRequirement(candidate);
     const key = requirement.toLocaleLowerCase();
     if (!requirement || seen.has(key)) continue;
     seen.add(key);
@@ -133,6 +203,29 @@ function renderKeyRequirements(result: JobAnalysisResult): void {
   }
 }
 
+function renderCandidateExpectations(result: JobAnalysisResult): void {
+  candidateExpectationsList.replaceChildren();
+  const fromModel = Array.isArray(result.candidateExpectations)
+    ? result.candidateExpectations.map(normalizeRequirement).filter(Boolean)
+    : [];
+  const expectations = fromModel.length > 0
+    ? fromModel
+    : inferExplicitRequirements(descriptionInput.value).slice(0, 5);
+
+  if (expectations.length === 0) {
+    const item = document.createElement("li");
+    item.textContent = "Review the required skills, eligibility and availability listed in the vacancy.";
+    candidateExpectationsList.append(item);
+    return;
+  }
+
+  for (const expectation of [...new Set(expectations)].slice(0, 5)) {
+    const item = document.createElement("li");
+    item.textContent = expectation;
+    candidateExpectationsList.append(item);
+  }
+}
+
 function setPageToolsCollapsed(collapsed: boolean): void {
   pageToolsContent.hidden = collapsed;
   togglePageToolsButton.textContent = collapsed ? "Tools +" : "Tools −";
@@ -152,6 +245,7 @@ function renderAnalysis(result: JobAnalysisResult): void {
   englishSummary.textContent = result.englishSummary?.trim()
     || "An English role summary was not returned. Review the job description above.";
   renderKeyRequirements(result);
+  renderCandidateExpectations(result);
   resultCopy.textContent = strongFit ? "Strong fit" : "Not a strong fit";
   resultCopy.className = `result-copy fit-verdict ${strongFit ? "strong-fit" : "not-strong-fit"}`;
   resultPanel.classList.remove("error-state");
@@ -166,6 +260,7 @@ function renderError(message: string): void {
   matchScore.textContent = "--";
   englishSummary.textContent = "The role summary is unavailable because the analysis did not complete.";
   keyRequirementsList.replaceChildren();
+  candidateExpectationsList.replaceChildren();
   resultCopy.textContent = message;
   resultCopy.className = "result-copy fit-verdict error-copy";
   resultPanel.hidden = false;
