@@ -79,6 +79,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             Use status "Unmet" only when the candidate profile explicitly conflicts with the vacancy, such as a stated B1 level for a mandatory C2 requirement. Use "Unverified" when the information is missing or a placeholder. The job ad is never evidence that the candidate meets a requirement.
             - rationale: explain the recommendation with concrete evidence from the profile
 
+            englishSummary must summarise the vacancy only; do not mention the candidate or candidate fit in that field.
+            summary and rationale must assess fit using candidate-profile evidence, not assumptions.
             Be concise and specific. Mention important skill matches and gaps. Do not treat a skill as
             professionally experienced if the profile lists it only under project or academic skills.
             """;
