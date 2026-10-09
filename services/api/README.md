@@ -88,7 +88,36 @@ After those checks, the backend applies deterministic deductions to distinct gap
 
 These weights are a transparent heuristic, not a statistically validated probability of receiving an interview or offer. Evaluate them against labelled vacancies before treating scores as predictive.
 
-## 3. Run the API
+## 3. Saved job history and dashboard
+
+The API creates a local SQLite database at `services/api/jobpilot.db` by default. The file is ignored by Git. A successful analysis from either DBot or the dashboard is saved automatically, including the job description, fit score, recommendation, matched requirements, gaps, and questions. The dashboard can update application status and notes.
+
+Available endpoints:
+
+- `GET /api/jobs` — list saved jobs, newest updated first.
+- `GET /api/jobs/{id}` — get the saved job, original description, notes, and full analysis.
+- `PUT /api/jobs/{id}` — update `applicationStatus` and `notes`. Allowed statuses: `Saved`, `Applied`, `Interview`, `Rejected`, `Offer`.
+- `POST /api/jobs/analyze` — analyze and save a job.
+
+To run the dashboard, keep the API running in one terminal. In a second terminal from the repository root:
+
+```powershell
+cd apps/dashboard
+npm install
+npm run dev
+```
+
+Open the local URL shown by Vite, usually `http://127.0.0.1:5173`. The dashboard uses `VITE_API_BASE_URL` if set; otherwise, it calls `http://127.0.0.1:5080`.
+
+### PostgreSQL for hosted deployment
+
+SQLite is intended for local development. To use PostgreSQL, set `Database:Provider` to `Postgres` and set `ConnectionStrings:JobPilot` to a standard Npgsql connection string, or configure `DATABASE_URL` with a PostgreSQL connection URI from your managed provider. URI-based connections are configured to require TLS.
+
+The initial schema is created with EF Core `EnsureCreated` for this prototype. Once the schema needs versioned upgrades, add EF Core migrations before evolving the deployed database.
+
+**Security before public deployment:** the current saved-job endpoints do not have sign-in or user-level authorization. Do not expose this API publicly until API access is protected and the Gemini key and database credentials are configured as server-side secrets. Set `DASHBOARD_ORIGIN` to the exact HTTPS origin of the deployed dashboard for production CORS.
+
+## 4. Run the API
 
 ```powershell
 dotnet run --urls http://127.0.0.1:5080
@@ -103,7 +132,8 @@ Invoke-RestMethod http://127.0.0.1:5080/api/health
 ## Endpoints
 
 - `GET /api/health` — local health check.
-- `POST /api/jobs/analyze` — analyses a supplied job description against the local candidate profile.
+- `GET /api/jobs`, `GET /api/jobs/{id}`, and `PUT /api/jobs/{id}` — saved job history and tracker.
+- `POST /api/jobs/analyze` — analyses a supplied job description against the local candidate profile and saves the result.
 
 Example request:
 
@@ -143,7 +173,7 @@ The quality checks are development guardrails for these controlled scenarios, no
 
 ## Current boundaries
 
-- Job descriptions and candidate profile are not stored by this API.
+- Successful analyses and their job descriptions are stored in the configured database. The candidate profile is read from its local configured JSON file and is not written to the saved-job database.
 - In Gemini mode, the Gemini key stays on the backend and is never returned to the browser.
 - Analysis is decision support only. It does not submit applications.
 - If required profile facts are unknown, the model should flag them for review.
