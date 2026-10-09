@@ -24,7 +24,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         var model = configuration["GEMINI_MODEL"];
         if (string.IsNullOrWhiteSpace(model))
         {
-            model = "gemini-3.8-flash";
+            model = "gemini-3.7-flash";
         }
 
         var endpoint =
