@@ -117,7 +117,7 @@ public static class ProfileEvidenceCatalog
 
         return Regex.IsMatch(
             text.Trim(),
-            @"^(?:replace\b|placeholder\b|unknown\b|not\s+specified\b|not\s+provided\b|tbd\b|n\s*/\s*a\b)",
+            @"^(?:replace\b|placeholder\b|unknown\b|not\s+specified\b|not\s+provided\b|add\b|enter\b|update\b|fill\s+in\b|tbd\b|n\s*/\s*a\b)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 }
