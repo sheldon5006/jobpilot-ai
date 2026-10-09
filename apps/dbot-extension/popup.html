@@ -15,13 +15,36 @@
           <p class="eyebrow">JOBPILOT AI</p>
           <h1>DBot <span>Job Assistant</span></h1>
         </div>
-        <span class="version-tag">0.2.0</span>
+        <span class="version-tag">0.3.0</span>
       </header>
 
       <section class="intro" aria-labelledby="intro-title">
         <p class="eyebrow">AI JOB ANALYSIS</p>
         <h2 id="intro-title">Is this role right for you?</h2>
-        <p>DBot compares the job requirements against your configured candidate profile and explains the fit.</p>
+        <p>Keep DBot beside the page while you browse. Fetch job details from the current page or let DBot detect them for you.</p>
+      </section>
+
+      <section class="page-tools" aria-labelledby="page-tools-title">
+        <div class="page-tools-heading">
+          <div>
+            <p class="eyebrow">CURRENT WEBPAGE</p>
+            <h2 id="page-tools-title">Fetch job details</h2>
+          </div>
+          <span class="page-tools-icon" aria-hidden="true">↧</span>
+        </div>
+        <p class="page-tools-description">Read the job title, company and description from the current page HTML. Check the details before analysing.</p>
+        <button id="fetch-current-page-button" class="secondary-button" type="button">↧ Fetch from current page</button>
+        <p id="page-fetch-status" class="page-fetch-status" role="status">Ready to inspect the current tab when you choose Fetch.</p>
+        <div class="settings-divider"></div>
+        <label class="setting-row" for="auto-fetch-toggle">
+          <input id="auto-fetch-toggle" type="checkbox" />
+          <span><strong>Auto-fetch on page changes</strong><small>When enabled, DBot checks pages you visit for job details.</small></span>
+        </label>
+        <label class="setting-row" for="auto-analyze-toggle">
+          <input id="auto-analyze-toggle" type="checkbox" disabled />
+          <span><strong>Auto-analyse detected jobs</strong><small>Automatically send a detected job and your configured profile to the AI provider.</small></span>
+        </label>
+        <p class="permission-note">Automatic fetching asks for your permission to read pages on HTTP/HTTPS sites. You can leave it off and fetch only the current tab when you need it. DBot does not submit applications.</p>
       </section>
 
       <form id="job-form">
@@ -44,7 +67,7 @@
         <p class="field-hint">Paste the full description for the best result. German descriptions are supported.</p>
 
         <div class="privacy-note">
-          <strong>Before analysis:</strong> When you click Analyze, the job description and the candidate profile configured in the local API are sent to Google's Gemini API. Google may use free-tier content to improve its products. Keep personal identifiers out of the profile.
+          <strong>Before analysis:</strong> When you analyse a job, its description and your saved candidate profile are sent to your configured AI provider. Google may use free-tier Gemini content to improve its products. Turn off Auto-analyse if you prefer to review every detected description first.
         </div>
 
         <button id="analyze-button" class="primary-button" type="submit">
@@ -113,7 +136,7 @@
 
       <footer>
         <span class="status-dot" aria-hidden="true"></span>
-        <span>Local API · Runs only when you click Analyze · No application submission</span>
+        <span>Browser side panel · Page access is permission-controlled · No application submission</span>
       </footer>
     </main>
     <script type="module" src="/src/popup.ts"></script>
