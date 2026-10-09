@@ -106,7 +106,7 @@ public static class JobRequirementRuleEngine
                     language,
                     "Must-have",
                     "Unmet",
-                    $"{language} proficiency does not meet the vacancy's explicitly stated {requiredLevel?.ToString() ?? "mandatory"} requirement based on the candidate profile.");
+                    $"{language} proficiency does not meet the vacancy's explicitly stated {GetRequiredLevelLabel(nearbyText) ?? "mandatory"} requirement based on the candidate profile.");
                 RemoveLanguageQuestions(result, language, alternateName);
                 result.Summary = AppendText(result.Summary,
                     $"{language} is a mandatory requirement and the candidate profile indicates the required level is not met.");
@@ -193,6 +193,12 @@ public static class JobRequirementRuleEngine
         // Highest level named as a condition in the vacancy (e.g. German C2 required).
         var match = LevelPattern.Match(context);
         return match.Success ? LevelRank(match.Value) : null;
+    }
+
+    private static string? GetRequiredLevelLabel(string context)
+    {
+        var match = LevelPattern.Match(context);
+        return match.Success ? match.Value.ToUpperInvariant() : null;
     }
 
     private static int? GetLevel(string proficiency)
