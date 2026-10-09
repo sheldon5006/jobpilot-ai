@@ -1,7 +1,7 @@
 {
   "name": "dbot-extension",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "@types/chrome": "^0.0.326"
   }
 }
