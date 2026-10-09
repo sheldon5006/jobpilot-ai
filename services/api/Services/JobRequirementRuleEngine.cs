@@ -293,11 +293,11 @@ public static class JobRequirementRuleEngine
 
         if (statesPositiveEligibility && !requiresSponsorship)
         {
-            result.MatchedRequirements.Add(new MatchedRequirement
-            {
-                Requirement = authorizationRequirement,
-                Evidence = $"Candidate profile explicitly states: '{profileStatus}'."
-            });
+            result.MatchedRequirements.Add(CreateProfileFactMatch(
+                profile,
+                authorizationRequirement,
+                "work_authorization",
+                fact => string.Equals(fact.Text, profileStatus, StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 "The candidate profile states work eligibility consistent with the vacancy's stated sponsorship condition.");
             result.Rationale = AppendText(result.Rationale,
@@ -382,11 +382,10 @@ public static class JobRequirementRuleEngine
 
             if (isMet)
             {
-                result.MatchedRequirements.Add(new MatchedRequirement
-                {
-                    Requirement = label,
-                    Evidence = BuildExperienceEvidence(profile, candidateMonths!.Value)
-                });
+                result.MatchedRequirements.Add(BuildExperienceMatch(
+                    profile,
+                    label,
+                    candidateMonths!.Value));
                 continue;
             }
 
@@ -648,11 +647,11 @@ public static class JobRequirementRuleEngine
 
             if (!string.IsNullOrWhiteSpace(evidence))
             {
-                result.MatchedRequirements.Add(new MatchedRequirement
-                {
-                    Requirement = credentialLabel,
-                    Evidence = $"Candidate profile lists the credential: '{evidence.Trim()}'."
-                });
+                result.MatchedRequirements.Add(CreateProfileFactMatch(
+                    profile,
+                    credentialLabel,
+                    "certification",
+                    fact => string.Equals(fact.Text, evidence.Trim(), StringComparison.OrdinalIgnoreCase)));
                 continue;
             }
 
@@ -730,11 +729,11 @@ public static class JobRequirementRuleEngine
 
         if (!string.IsNullOrWhiteSpace(educationEvidence))
         {
-            result.MatchedRequirements.Add(new MatchedRequirement
-            {
-                Requirement = label,
-                Evidence = $"Candidate profile lists current study/enrolment: '{educationEvidence.Trim()}'."
-            });
+            result.MatchedRequirements.Add(CreateProfileFactMatch(
+                profile,
+                label,
+                "education",
+                fact => string.Equals(fact.Text, educationEvidence.Trim(), StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 "Current university study/enrolment is supported by the candidate profile.");
             result.Rationale = AppendText(result.Rationale,
@@ -856,11 +855,12 @@ public static class JobRequirementRuleEngine
             }
 
             // The profile states a level, and there is no evidence it falls below any stated target.
-            result.MatchedRequirements.Add(new MatchedRequirement
-            {
-                Requirement = $"{language} proficiency",
-                Evidence = $"Candidate profile lists {language} proficiency as '{proficiency}'."
-            });
+            result.MatchedRequirements.Add(CreateProfileFactMatch(
+                profile,
+                $"{language} proficiency",
+                "language",
+                fact => fact.Text.StartsWith($"{language}:", StringComparison.OrdinalIgnoreCase) &&
+                        fact.Text.EndsWith(proficiency, StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 $"{language} proficiency is supported by the candidate profile.");
             result.Rationale = AppendText(result.Rationale,
@@ -889,11 +889,12 @@ public static class JobRequirementRuleEngine
             return;
         }
 
-        result.MatchedRequirements.Add(new MatchedRequirement
-        {
-            Requirement = $"{language} proficiency (preferred)",
-            Evidence = $"Candidate profile lists {language} proficiency as '{proficiency}'."
-        });
+        result.MatchedRequirements.Add(CreateProfileFactMatch(
+            profile,
+            $"{language} proficiency (preferred)",
+            "language",
+            fact => fact.Text.StartsWith($"{language}:", StringComparison.OrdinalIgnoreCase) &&
+                    fact.Text.EndsWith(proficiency, StringComparison.OrdinalIgnoreCase)));
         result.Summary = AppendText(result.Summary,
             $"The preferred {language} requirement is supported by the candidate profile.");
         RemoveLanguageQuestions(result, language, alternateName);
