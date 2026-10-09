@@ -171,7 +171,7 @@ public static class JobFitScoreCalibrator
         var retained = sentences.Where(sentence =>
             !Regex.IsMatch(
                 sentence,
-                @"\b(can|could|may)\s+be\s+verified\b|\bneed(s)?\s+to\s+be\s+verified\b|\bneeds?\s+verification\b|\bcan\s+be\s+cleared\s+up\b",
+                @"\b(can|could|may)\s+be\s+verified\b|\bneed(s)?\s+to\s+be\s+verified\b|\bneeds?\s+verification\b|\bcan\s+be\s+cleared\s+up\b|\bcreates?\s+(?:a\s+)?(?:must-have\s+)?gap\s+requiring\s+verification\b|\b(?:must-have\s+)?gap\s+(?:that\s+)?(?:requires?|needs?)\s+verification\b",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
 
         return string.Join(" ", retained).Trim();
