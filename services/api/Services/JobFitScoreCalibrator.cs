@@ -53,14 +53,22 @@ public static class JobFitScoreCalibrator
         result.MatchScore = Math.Clamp(modelScore - totalPenalty, 0, 100);
 
         var adjustments = new List<string>();
-        if (mustHaveUnmetCount > 0)
+        if (rawMustHavePenalty > MaxMustHavePenalty)
         {
-            adjustments.Add($"{mustHaveUnmetCount} explicitly unmet must-have gap(s): -{Math.Min(mustHaveUnmetCount * UnmetMustHavePenaltyPerGap, MaxMustHavePenalty)}");
+            adjustments.Add(
+                $"{mustHaveUnmetCount} explicitly unmet and {mustHaveUnverifiedCount} unverified must-have gap(s): -{mustHavePenalty} (mandatory-gap deduction capped at {MaxMustHavePenalty})");
         }
-
-        if (mustHaveUnverifiedCount > 0)
+        else
         {
-            adjustments.Add($"{mustHaveUnverifiedCount} unverified must-have gap(s): -{Math.Min(mustHaveUnverifiedCount * UnverifiedMustHavePenaltyPerGap, MaxMustHavePenalty)}");
+            if (mustHaveUnmetCount > 0)
+            {
+                adjustments.Add($"{mustHaveUnmetCount} explicitly unmet must-have gap(s): -{mustHaveUnmetCount * UnmetMustHavePenaltyPerGap}");
+            }
+
+            if (mustHaveUnverifiedCount > 0)
+            {
+                adjustments.Add($"{mustHaveUnverifiedCount} unverified must-have gap(s): -{mustHaveUnverifiedCount * UnverifiedMustHavePenaltyPerGap}");
+            }
         }
 
         if (preferredPenalty > 0)
