@@ -21,7 +21,12 @@ public sealed class EvidenceAndEligibilityTests
         };
         var result = new JobAnalysisResult
         {
-            QuestionsToVerify = ["Do you have valid, unrestricted authorization to work in the country where this position is based?"],
+            QuestionsToVerify =
+            [
+                "Do you have valid, unrestricted authorization to work in the country where this position is based?",
+                "Are you legally authorized to work in Germany?",
+                "Do you require visa sponsorship?"
+            ],
             Gaps = [new RequirementGap
             {
                 Requirement = "work authorization",
@@ -35,6 +40,10 @@ public sealed class EvidenceAndEligibilityTests
 
         Assert.DoesNotContain(result.QuestionsToVerify,
             question => question.Contains("authorization to work", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.QuestionsToVerify,
+            question => question.Contains("authorized to work", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.QuestionsToVerify,
+            question => question.Contains("visa sponsorship", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(result.Gaps,
             gap => gap.Requirement.Contains("work authorization", StringComparison.OrdinalIgnoreCase));
     }
