@@ -13,6 +13,10 @@ public sealed class SavedJob
     public string ApplicationStatus { get; set; } = "Saved";
     public string Notes { get; set; } = string.Empty;
     public string AnalysisJson { get; set; } = "{}";
+    public string? CvFileName { get; set; }
+    public string? CvContentType { get; set; }
+    public byte[]? CvBytes { get; set; }
+    public DateTime? CvUploadedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }
@@ -26,6 +30,8 @@ public sealed record SavedJobListItem(
     string DetectedLanguage,
     string Summary,
     string ApplicationStatus,
+    bool HasCv,
+    string? CvFileName,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
@@ -36,6 +42,9 @@ public sealed record SavedJobDetails(
     string JobDescription,
     string ApplicationStatus,
     string Notes,
+    string? CvFileName,
+    DateTime? CvUploadedAtUtc,
+    long? CvSizeBytes,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     JobAnalysisResult Analysis);
