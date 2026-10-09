@@ -136,13 +136,12 @@ public static class JobFitScoreCalibrator
         var hasOnlyNonBlockingGaps = gaps.All(gap => IsSeverity(gap, "Preferred"));
         if (result.Recommendation == "Review" &&
             result.MatchScore >= 80 &&
-            hasOnlyNonBlockingGaps &&
-            result.QuestionsToVerify.Count == 0)
+            hasOnlyNonBlockingGaps)
         {
             result.Recommendation = "Apply";
             result.Rationale = AppendOnce(
                 result.Rationale,
-                "Recommendation set to Apply because no mandatory gaps or unresolved questions remain; any remaining gaps are preferred rather than required.");
+                "Recommendation set to Apply because no mandatory gaps remain; any remaining gaps are preferred rather than required.");
         }
     }
 
