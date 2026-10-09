@@ -177,8 +177,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             _ => "Review"
         };
 
-        ProfileEvidenceValidator.Apply(profile, result);
         JobRequirementRuleEngine.Apply(request, profile, result);
+        ProfileEvidenceValidator.Apply(profile, result);
         JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
