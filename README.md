@@ -16,7 +16,7 @@ JobPilot AI is a personal job-search assistant built around **DBot**, a Chrome e
 jobpilot-ai/
 ├── apps/
 │   ├── dbot-extension/   # TypeScript Chrome extension (current milestone)
-│   └── web/              # Angular application tracker (later milestone)
+│   └── dashboard/        # TypeScript + Vite job-search dashboard
 ├── services/
 │   └── api/              # ASP.NET Core API + Gemini analysis
 ├── database/             # PostgreSQL / EF Core migrations (later milestone)
@@ -39,9 +39,9 @@ See [the API setup guide](services/api/README.md) and [the extension setup guide
 ## Architecture
 
 - **DBot extension:** TypeScript and Chrome Extension Manifest V3.
-- **Web dashboard:** Angular (planned).
+- **Web dashboard:** TypeScript + Vite (initial tracker implemented).
 - **Backend API:** ASP.NET Core / C#.
-- **Persistence:** PostgreSQL with Entity Framework Core (planned).
+- **Persistence:** Entity Framework Core; SQLite locally and PostgreSQL when configured for hosting.
 - **AI:** Gemini API for this prototype, called from the backend. The provider and model are configurable. Never put API keys in the extension or commit them to Git.
 
 ## Privacy and cost
