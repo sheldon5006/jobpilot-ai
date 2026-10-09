@@ -51,9 +51,28 @@ public static class JobFitScoreCalibrator
 
         var uncappedTotal = mustHavePenalty + preferredPenalty + unknownSeverityPenalty;
         var totalPenalty = Math.Min(uncappedTotal, MaxTotalPenalty);
-        result.MatchScore = Math.Clamp(modelScore - totalPenalty, 0, 100);
+        var normalCalibratedScore = Math.Clamp(modelScore - totalPenalty, 0, 100);
+        var explicitlyUnmetMustHaveCount = distinctGaps.Count(gap =>
+            IsSeverity(gap, "Must-have") && IsStatus(gap, "Unmet"));
+
+        // A confirmed non-negotiable mismatch is a hard eligibility gate. Normalising the
+        // score prevents the LLM's varying initial estimate from making the same disqualifier
+        // appear as 0 in one run and 30 in another. This is still a fit heuristic, not a probability.
+        int? hardGateScore = explicitlyUnmetMustHaveCount switch
+        {
+            0 => null,
+            1 => 20,
+            2 => 10,
+            _ => 0
+        };
+        result.MatchScore = hardGateScore ?? normalCalibratedScore;
 
         var adjustments = new List<string>();
+        if (hardGateScore.HasValue)
+        {
+            adjustments.Add(
+                $"{explicitlyUnmetMustHaveCount} explicitly unmet mandatory requirement(s): hard-gate score normalised to {hardGateScore.Value}/100");
+        }
         if (rawMustHavePenalty > MaxMustHavePenalty)
         {
             adjustments.Add(
