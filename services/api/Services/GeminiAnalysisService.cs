@@ -251,6 +251,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         }
 
         // Treat model output as untrusted and normalise missing/null fields before using them.
+        result.KeyRequirements ??= [];
+        result.CandidateExpectations ??= [];
         result.MatchedRequirements ??= [];
         result.Gaps ??= [];
         result.QuestionsToVerify ??= [];
