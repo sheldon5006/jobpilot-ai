@@ -64,6 +64,10 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Validate manifest JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('public/manifest.json', 'utf8'))"
+      - name: Validate service worker syntax
+        run: node --check public/service-worker.js
       - name: Type check
         run: npm run typecheck
       - name: Build extension
