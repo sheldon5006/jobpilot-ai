@@ -21,6 +21,10 @@ public static class ProfileEvidenceValidator
         @"\b(?:certification|certificate|credential|licen[cs]e|security[\s-]+clearance)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex EducationRequirement = new(
+        @"\b(?:degree|qualification|graduate|graduation|university|education|academic|study|bachelor|master|MSc|BSc|PhD|diploma)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex LanguageRequirement = new(
         @"\b(?:language|German|Deutsch|English|Englisch|CEFR|proficiency|C2|C1|B2|B1|A2|A1)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -120,6 +124,11 @@ public static class ProfileEvidenceValidator
         if (LanguageRequirement.IsMatch(requirement))
         {
             return Set("language");
+        }
+
+        if (EducationRequirement.IsMatch(requirement))
+        {
+            return Set("education");
         }
 
         if (ExplicitProfessionalExperience.IsMatch(requirement))
