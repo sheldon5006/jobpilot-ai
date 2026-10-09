@@ -18,6 +18,8 @@ public sealed class JobAnalysisResult
     public List<RequirementGap> Gaps { get; set; } = [];
     public List<string> QuestionsToVerify { get; set; } = [];
     public string Rationale { get; set; } = string.Empty;
+    public string MandatoryRequirementsStatus { get; set; } = "Unknown";
+    public List<string> EvidenceValidationWarnings { get; set; } = [];
 
     // DBot provides decision support only; it never submits an application.
     public bool RequiresHumanReview { get; set; } = true;
@@ -28,6 +30,7 @@ public sealed class MatchedRequirement
 {
     public string Requirement { get; set; } = string.Empty;
     public string Evidence { get; set; } = string.Empty;
+    public List<string> EvidenceIds { get; set; } = [];
 }
 
 public sealed class RequirementGap
