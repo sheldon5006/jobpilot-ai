@@ -26,10 +26,10 @@ In the same PowerShell session, set your API key as an environment variable (rep
 
 ```powershell
 $env:GEMINI_API_KEY = "PASTE_YOUR_KEY_HERE"
-$env:GEMINI_MODEL = "gemini-3.7-flash"
+$env:GEMINI_MODEL = "gemini-3.8-flash"
 ```
 
-The default model is `gemini-3.7-flash`. You can change `GEMINI_MODEL` to another model that is available to your API key and free tier. The API does not fall back to paid use automatically.
+The default model is `gemini-3.8-flash`. You can change `GEMINI_MODEL` to another model that is available to your API key and free tier. The API does not fall back to paid use automatically.
 
 **Free-tier privacy note:** Google's Gemini API pricing page states that free-tier content may be used to improve its products. DBot sends the job description and candidate profile only when you explicitly click Analyze. Keep personal identifiers such as phone number, home address and email out of the analysis profile unless you have a clear reason to send them.
 
