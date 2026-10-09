@@ -65,7 +65,16 @@ Keep the `Gemini` section if you may want to switch back later; no Gemini API ke
 
 ## Score calibration
 
-The model supplies an initial 0–100 fit estimate. The backend then reconciles explicitly stated English/German requirements against the local candidate profile and applies deterministic deductions to distinct gaps:
+The model supplies an initial 0–100 fit estimate. The backend then reconciles explicitly stated requirements against the local candidate profile. Deterministic eligibility checks cover:
+- Existing right-to-work conditions and explicit no-sponsorship clauses (only when the vacancy states them).
+- Explicit minimum relevant professional experience, using the profile summary or complete dated work history.
+- Required professional certifications/licences and security clearance, checked against `certifications`.
+- Current university enrolment for Werkstudent/working-student roles, checked against active/in-progress education entries.
+- Explicit English/German requirements and CEFR levels.
+
+Missing profile facts are treated as Unverified rather than assumed to be absent. An explicit conflict with a mandatory requirement is Unmet. Sponsorship availability alone is not treated as a disqualifier.
+
+After those checks, the backend applies deterministic deductions to distinct gaps:
 
 - Explicitly unmet must-have gap: 40 points each, capped at 50 points.
 - Unverified must-have gap: 20 points each, capped at 50 points.
@@ -74,6 +83,7 @@ The model supplies an initial 0–100 fit estimate. The backend then reconciles 
 - Total deduction is capped at 60 points; the final score is constrained to 0–100.
 - Duplicate gap requirements are counted once, using the highest applicable deduction.
 - A clearly unmet must-have requirement forces `Skip`; an unverified must-have requirement forces `Review`. Preferred gaps do not block `Apply` by themselves.
+- When one or more mandatory requirements are explicitly unmet, the final fit score is normalised to 20/100 for one unmet gate, 10/100 for two, and 0/100 for three or more. This makes hard-gate scores stable across model runs; the rationale still reports the model's initial estimate.
 - A language gap is only scored when the vacancy explicitly states that language as required or preferred. The job ad is not evidence of the candidate's language proficiency.
 
 These weights are a transparent heuristic, not a statistically validated probability of receiving an interview or offer. Evaluate them against labelled vacancies before treating scores as predictive.
@@ -115,9 +125,11 @@ Start the API locally and configure the provider you want to evaluate in `appset
 .\services\api\scripts\Invoke-RegressionTests.ps1
 ```
 
-The script tests a strong technical match, a preferred German requirement, and an unmet mandatory German C2 requirement. It checks recommendation and gap behaviour, flags unsupported follow-up questions, verifies that matched requirements appear in the vacancy, checks that each evidence item is a meaningful statement anchored in the local candidate profile, and validates the score-calibration explanation.
+The script tests six scenarios: a strong technical match, preferred German, mandatory German C2, explicit work-authorisation/sponsorship conditions, a mandatory AWS certification, and current enrolment for a Werkstudent role. Eligibility cases adapt to the verified facts in the local profile. It checks recommendations and gaps, allows only expected targeted verification questions, verifies matched requirements against vacancy text, checks evidence against profile facts, and validates the score-calibration explanation.
 
-By default, it makes two extra calls for the same strong-match vacancy to detect score variation. It fails the score-stability check when the repeated scores differ by more than 10 points. Skip the extra calls with `-SkipScoreStability`, or choose another tolerance with `-ScoreTolerance 15`.
+By default, it makes two extra calls for each of the first three scenarios to check score stability. It fails if repeated scores differ by more than 10 points. Skip the extra calls with `-SkipScoreStability`, or choose another tolerance with `-ScoreTolerance 15`.
+
+The local candidate profile supports `workAuthorization` (an accurate, country-specific right-to-work/sponsorship statement) and `certifications` (exact credentials and validity details). Leave either unknown until you can verify it; never invent these values.
 
 The quality checks are development guardrails for these controlled scenarios, not proof of accuracy across all vacancies. The script reads the ignored local `candidate-profile.json`; do not commit that file or paste personal data into issues.
 
