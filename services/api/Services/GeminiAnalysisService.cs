@@ -152,11 +152,13 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         {
             result = JsonSerializer.Deserialize<JobAnalysisResult>(jsonText, JsonOptions);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            throw new GeminiApiException(
-                "Gemini returned an unexpected response format. Please try again.",
-                (int)HttpStatusCode.BadGateway);
+            // Keep the upstream payload private, but expose the JSON path/type mismatch
+            // so local development can identify which field needs a more flexible schema.
+            var path = string.IsNullOrWhiteSpace(ex.Path) ? "the response root" : ex.Path;
+            var detail = $"Gemini returned JSON that does not match the expected schema at {path}. {ex.Message}";
+            throw new GeminiApiException(detail, (int)HttpStatusCode.BadGateway);
         }
 
         if (result is null)
