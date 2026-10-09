@@ -156,12 +156,12 @@ public static class JobFitScoreCalibrator
 
         // Do not let an obsolete Review recommendation caused only by a removed, irrelevant
         // language gap block a strong match. Preferred gaps alone do not require Review.
-        if (result.EvidenceValidationWarnings.Count > 0)
+        if (result.EvidenceValidationWarnings.Count > 0 || result.RequirementValidationWarnings.Count > 0)
         {
             result.Recommendation = "Review";
             result.Rationale = AppendOnce(
                 result.Rationale,
-                "Recommendation remains Review because one or more matched-requirement evidence references failed validation.");
+                "One or more generated requirements or evidence references failed validation. Review the analysis-validation warnings before relying on the recommendation.");
             return;
         }
 
