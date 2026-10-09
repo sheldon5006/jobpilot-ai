@@ -303,12 +303,45 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
                 "What is your current English proficiency level? Update the candidate profile with an accurate level.");
         }
 
+        result.Summary = RemoveUnsupportedEnglishClaims(result.Summary);
+        result.Rationale = RemoveUnsupportedEnglishClaims(result.Rationale);
+
         result.Summary = AppendOnce(
             result.Summary,
-            "English proficiency is not verified in the candidate profile and must be confirmed before treating the role as a complete match.");
+            "The role's required English proficiency is not verified in the candidate profile and must be confirmed before applying.");
         result.Rationale = AppendOnce(
             result.Rationale,
             "The job requires English, but the candidate profile's English proficiency is missing or still a placeholder, so this mandatory requirement remains unverified.");
+    }
+
+    private static string RemoveUnsupportedEnglishClaims(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        var retained = sentences.Where(sentence =>
+        {
+            if (!sentence.Contains("English", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var claimsPositiveProficiency = Regex.IsMatch(
+                sentence,
+                @"\\b(confirmed|verified|proficient|fluent|demonstrates?|meets?|matches?|matched|satisfies|sufficient)\\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var explicitlyAcknowledgesUncertainty = Regex.IsMatch(
+                sentence,
+                @"\\b(not|no|unknown|unverified|unconfirmed|missing|gap|confirm|verify)\\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+            return !(claimsPositiveProficiency && !explicitlyAcknowledgesUncertainty);
+        });
+
+        return string.Join(" ", retained).Trim();
     }
 
     private static string AppendOnce(string existing, string addition)
