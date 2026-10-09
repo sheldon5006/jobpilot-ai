@@ -342,7 +342,7 @@ public static class JobRequirementRuleEngine
                 profile,
                 authorizationRequirement,
                 "work_authorization",
-                fact => string.Equals(fact.Text, profileStatus, StringComparison.OrdinalIgnoreCase)));
+                fact => profileStatus.StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 "The candidate profile states work eligibility consistent with the vacancy's stated sponsorship condition.");
             result.Rationale = AppendText(result.Rationale,
@@ -522,10 +522,7 @@ public static class JobRequirementRuleEngine
     private static int? GetExperienceMonthsFromPeriods(IReadOnlyCollection<ExperienceEntry> experiences)
     {
         if (experiences.Count == 0 ||
-            experiences.Any(experience => string.IsNullOrWhiteSpace(experience.Period) ||
-                experience.Period.Contains("replace", StringComparison.OrdinalIgnoreCase) ||
-                experience.Period.Contains("unknown", StringComparison.OrdinalIgnoreCase) ||
-                experience.Period.Contains("not specified", StringComparison.OrdinalIgnoreCase)))
+            experiences.Any(experience => string.IsNullOrWhiteSpace(ProfileEvidenceCatalog.CleanFactText(experience.Period))))
         {
             return null;
         }
@@ -533,7 +530,8 @@ public static class JobRequirementRuleEngine
         var intervals = new List<(int Start, int End)>();
         foreach (var experience in experiences)
         {
-            var matches = PeriodMonthYear.Matches(experience.Period);
+            var cleanPeriod = ProfileEvidenceCatalog.CleanFactText(experience.Period);
+            var matches = PeriodMonthYear.Matches(cleanPeriod);
             DateTime start;
             DateTime end;
 
@@ -547,7 +545,7 @@ public static class JobRequirementRuleEngine
             }
             else if (matches.Count == 1 &&
                      Regex.IsMatch(
-                         experience.Period,
+                         cleanPeriod,
                          @"\b(?:present|current|now)\b",
                          RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             {
@@ -626,7 +624,7 @@ public static class JobRequirementRuleEngine
             var summary = profile.ProfessionalSummary?.Trim() ?? string.Empty;
             facts = SummaryExperienceAmount.IsMatch(summary)
                 ? catalog.Where(fact => fact.Category == "professional_summary" &&
-                                        string.Equals(fact.Text, summary, StringComparison.OrdinalIgnoreCase)).ToList()
+                                        summary.StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)).ToList()
                 : [];
         }
 
@@ -720,7 +718,7 @@ public static class JobRequirementRuleEngine
                     profile,
                     credentialLabel,
                     "certification",
-                    fact => string.Equals(fact.Text, evidence.Trim(), StringComparison.OrdinalIgnoreCase)));
+                    fact => evidence.Trim().StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)));
                 continue;
             }
 
@@ -802,7 +800,7 @@ public static class JobRequirementRuleEngine
                 profile,
                 label,
                 "education",
-                fact => string.Equals(fact.Text, educationEvidence.Trim(), StringComparison.OrdinalIgnoreCase)));
+                fact => educationEvidence.Trim().StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 "Current university study/enrolment is supported by the candidate profile.");
             result.Rationale = AppendText(result.Rationale,
@@ -929,7 +927,7 @@ public static class JobRequirementRuleEngine
                 $"{language} proficiency",
                 "language",
                 fact => fact.Text.StartsWith($"{language}:", StringComparison.OrdinalIgnoreCase) &&
-                        fact.Text.EndsWith(proficiency, StringComparison.OrdinalIgnoreCase)));
+                        fact.Text.EndsWith(proficiency.Split(';', 2)[0].Trim(), StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 $"{language} proficiency is supported by the candidate profile.");
             result.Rationale = AppendText(result.Rationale,
@@ -963,7 +961,7 @@ public static class JobRequirementRuleEngine
             $"{language} proficiency (preferred)",
             "language",
             fact => fact.Text.StartsWith($"{language}:", StringComparison.OrdinalIgnoreCase) &&
-                    fact.Text.EndsWith(proficiency, StringComparison.OrdinalIgnoreCase)));
+                    fact.Text.EndsWith(proficiency.Split(';', 2)[0].Trim(), StringComparison.OrdinalIgnoreCase)));
         result.Summary = AppendText(result.Summary,
             $"The preferred {language} requirement is supported by the candidate profile.");
         RemoveLanguageQuestions(result, language, alternateName);
