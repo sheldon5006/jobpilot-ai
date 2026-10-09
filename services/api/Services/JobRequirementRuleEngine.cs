@@ -241,7 +241,7 @@ public static class JobRequirementRuleEngine
         {
             AddGap(
                 result,
-                "Right to work in the role's country / sponsorship eligibility",
+                authorizationRequirement,
                 "Must-have",
                 "Unverified",
                 "The vacancy explicitly makes work eligibility or sponsorship status a condition, but the candidate profile does not establish the current status.");
@@ -262,7 +262,7 @@ public static class JobRequirementRuleEngine
         {
             AddGap(
                 result,
-                "Right to work in the role's country / sponsorship eligibility",
+                authorizationRequirement,
                 "Must-have",
                 "Unmet",
                 "The profile explicitly indicates that the stated work-authorisation or no-sponsorship condition is not met.");
