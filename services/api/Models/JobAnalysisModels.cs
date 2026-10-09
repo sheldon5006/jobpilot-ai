@@ -9,6 +9,9 @@ public sealed class JobAnalysisRequest
 
 public sealed class JobAnalysisResult
 {
+    // Filled by the API when this analysis is saved to history.
+    public Guid? JobId { get; set; }
+    public DateTime? AnalyzedAtUtc { get; set; }
     public string Recommendation { get; set; } = "Review";
     public int MatchScore { get; set; }
     public string DetectedLanguage { get; set; } = "Unknown";
