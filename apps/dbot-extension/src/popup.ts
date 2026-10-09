@@ -91,7 +91,7 @@ function setPageStatus(message: string, kind: "info" | "success" | "error" = "in
 
 function detectRoleLanguages(description: string): string[] {
   const text = description.normalize("NFKC");
-  const requirementCue = /\\b(?:language|languages|skills?|proficiency|fluency|knowledge|spoken|written|speaking|speak|fluent|good|very good|excellent|native|professional|advanced|intermediate|basic|required|requirement|must|level|c1|c2|b1|b2|a1|a2|communication|plus|advantage|preferred|desirable|kenntnisse|sprachkenntnisse|sprachniveau|verhandlungssicher|fliessend|fließend|gute|gut|wünschenswert|vorteil)\\b/i;
+  const requirementCue = /\b(?:language|languages|skills?|proficiency|fluency|knowledge|spoken|written|speaking|speak|fluent|good|very good|excellent|native|professional|advanced|intermediate|basic|required|requirement|must|level|c1|c2|b1|b2|a1|a2|communication|plus|advantage|preferred|desirable|kenntnisse|sprachkenntnisse|sprachniveau|verhandlungssicher|fliessend|fließend|gute|gut|wünschenswert|vorteil)\b/i;
 
   const requirementMentioned = (languagePattern: RegExp): boolean => {
     let match: RegExpExecArray | null;
@@ -104,10 +104,10 @@ function detectRoleLanguages(description: string): string[] {
   };
 
   const detected: string[] = [];
-  if (requirementMentioned(/german|deutsch(?:kenntnisse|kenntnissen|kenntnis|sprachkenntnisse|sprachkenntnis)?/gi)) {
+  if (requirementMentioned(/\b(?:german|deutsch(?:kenntnisse|kenntnissen|kenntnis|sprachkenntnisse|sprachkenntnis)?)\b/gi)) {
     detected.push("DE");
   }
-  if (requirementMentioned(/english|englisch(?:kenntnisse|kenntnissen|kenntnis|sprachkenntnisse|sprachkenntnis)?/gi)) {
+  if (requirementMentioned(/\b(?:english|englisch(?:kenntnisse|kenntnissen|kenntnis|sprachkenntnisse|sprachkenntnis)?)\b/gi)) {
     detected.push("EN");
   }
   return detected;
