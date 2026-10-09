@@ -114,6 +114,24 @@ public sealed class EvidenceAndEligibilityTests
     }
 
     [Fact]
+    public void LearningLanguageLevelSurvivesTemplateGuidance()
+    {
+        var profile = new CandidateProfile
+        {
+            Languages = [new LanguageEntry
+            {
+                Language = "German",
+                Proficiency = "Learning; add a CEFR level only if verified"
+            }]
+        };
+
+        var languageFact = Assert.Single(ProfileEvidenceCatalog.Create(profile)
+            .Where(fact => fact.Category == "language"));
+
+        Assert.Equal("German: Learning", languageFact.Text);
+    }
+
+    [Fact]
     public void ReplacedLegacyApplicationsAreNotMistakenForPlaceholders()
     {
         var profile = new CandidateProfile
