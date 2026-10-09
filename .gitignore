@@ -1,0 +1,43 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+**/appsettings.Development.json
+**/secrets.json
+*.pem
+*.key
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+.npm/
+*.tsbuildinfo
+
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+*.cache
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated application documents / local data
+local-data/
+generated-cvs/
+uploads/
