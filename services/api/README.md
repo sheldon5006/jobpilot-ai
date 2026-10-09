@@ -63,6 +63,19 @@ Keep the `Gemini` section if you may want to switch back later; no Gemini API ke
 
 **After changing the provider or model, restart the ASP.NET Core API.**
 
+## Score calibration
+
+The model provides an initial 0–100 fit estimate. The backend then deducts points for distinct reported gaps:
+
+- Must-have gap: 20 points each, capped at 50 points.
+- Preferred gap: 5 points each, capped at 20 points.
+- Gap whose severity is missing or unrecognised: 8 points each, capped at 24 points.
+- Total deduction is capped at 60 points; the final score is constrained to 0–100.
+- Duplicate gap requirements are counted once, using the highest applicable deduction.
+- Generic follow-up questions alone do not reduce the score; material unknowns should also be represented as gaps.
+
+The calibrated value is a transparent heuristic, not a statistically validated probability of getting an interview or offer. The weights should be evaluated against a labelled set of real vacancies before being treated as predictive.
+
 ## 3. Run the API
 
 ```powershell
