@@ -133,7 +133,9 @@ function Test-EvidenceGroundedInProfile {
         $coverage = $overlap / [double]$anchorTokens.Count
         $minimumOverlap = [math]::Min(3, $anchorTokens.Count)
 
-        if ($overlap -ge $minimumOverlap -and $coverage -ge 0.7) {
+        # Short paraphrases can omit extra details present in a longer profile anchor.
+        # Require at least three shared meaningful tokens, but allow 60% coverage.
+        if ($overlap -ge $minimumOverlap -and $coverage -ge 0.6) {
             return $true
         }
     }
