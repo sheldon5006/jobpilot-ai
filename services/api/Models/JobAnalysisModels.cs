@@ -5,6 +5,7 @@ public sealed class JobAnalysisRequest
     public string? JobTitle { get; init; }
     public string? Company { get; init; }
     public string JobDescription { get; init; } = string.Empty;
+    public bool SaveToHistory { get; init; } = true;
 }
 
 public sealed class JobAnalysisResult
