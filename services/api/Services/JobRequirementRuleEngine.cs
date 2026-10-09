@@ -220,6 +220,12 @@ public static class JobRequirementRuleEngine
             WorkAuthorizationTopic.IsMatch(clause) && ExplicitWorkAuthorizationCue.IsMatch(clause));
         var sponsorshipOfferOnly = clauses.Any(clause => SponsorshipOfferedCue.IsMatch(clause)) &&
             !hasExplicitNoSponsorship && !hasExplicitRightToWorkGate;
+        var authorizationRequirement = clauses
+            .Where(clause => NoSponsorshipCue.IsMatch(clause) || ExplicitWorkAuthorizationCue.IsMatch(clause))
+            .Select(clause => WorkAuthorizationTopic.Match(clause))
+            .Where(match => match.Success)
+            .Select(match => match.Value.Trim())
+            .FirstOrDefault() ?? "work authorization";
 
         RemoveWorkAuthorizationEntries(result);
 
@@ -285,7 +291,7 @@ public static class JobRequirementRuleEngine
         {
             result.MatchedRequirements.Add(new MatchedRequirement
             {
-                Requirement = "Right to work in the role's country / sponsorship eligibility",
+                Requirement = authorizationRequirement,
                 Evidence = $"Candidate profile explicitly states: '{profileStatus}'."
             });
             result.Summary = AppendText(result.Summary,
