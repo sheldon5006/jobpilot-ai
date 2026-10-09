@@ -286,8 +286,38 @@ $cases = @(
     }
 )
 
+function Get-ApiErrorDetail {
+    param([Parameter(Mandatory)]$ErrorRecord)
+
+    $body = [string]$ErrorRecord.ErrorDetails.Message
+    if (-not [string]::IsNullOrWhiteSpace($body)) {
+        try {
+            $problem = $body | ConvertFrom-Json -ErrorAction Stop
+            if (-not [string]::IsNullOrWhiteSpace([string]$problem.detail)) {
+                return ([string]$problem.detail).Trim()
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$problem.title)) {
+                return ([string]$problem.title).Trim()
+            }
+        } catch {
+            # Some reverse proxies return plain text instead of Problem Details JSON.
+        }
+
+        return $body.Trim()
+    }
+
+    return [string]$ErrorRecord.Exception.Message
+}
+
 function Get-ApiHttpStatusCode {
     param([Parameter(Mandatory)]$ErrorRecord)
+
+    # Our API maps most upstream Gemini errors to its own HTTP 502. Prefer the
+    # provider status embedded in Problem Details so only genuine transient failures retry.
+    $detail = Get-ApiErrorDetail -ErrorRecord $ErrorRecord
+    if ($detail -match '(?i)\b(?:Gemini|Ollama) returned HTTP\s+(\d{3})\b') {
+        return [int]$Matches[1]
+    }
 
     try {
         $response = $ErrorRecord.Exception.Response
@@ -335,7 +365,7 @@ function Invoke-JobAnalysis {
                 StatusCode = 0
             }
         } catch {
-            $lastError = $_.Exception.Message
+            $lastError = Get-ApiErrorDetail -ErrorRecord $_
             $statusCode = Get-ApiHttpStatusCode -ErrorRecord $_
             $lastStatusCode = $statusCode
 
