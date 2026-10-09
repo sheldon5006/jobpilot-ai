@@ -1,0 +1,258 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #182230;
+  background: #f5f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 420px;
+  min-height: 560px;
+  margin: 0;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(77, 124, 254, 0.12), transparent 34%),
+    #f5f7fb;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  padding: 22px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 13px;
+  color: #fff;
+  background: linear-gradient(135deg, #3158d8, #647ff5);
+  font-size: 22px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(49, 88, 216, 0.2);
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: #66748a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 18px;
+  letter-spacing: -0.04em;
+}
+
+h1 span {
+  color: #68758b;
+  font-weight: 500;
+}
+
+.version-tag {
+  margin-left: auto;
+  padding: 5px 7px;
+  border: 1px solid #e1e7f0;
+  border-radius: 7px;
+  color: #68758b;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+}
+
+.intro {
+  margin: 26px 0 20px;
+}
+
+.intro h2 {
+  margin-bottom: 8px;
+  font-size: 23px;
+  letter-spacing: -0.045em;
+}
+
+.intro > p:last-child {
+  margin-bottom: 0;
+  color: #68758b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+}
+
+label {
+  margin-top: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.optional {
+  color: #8490a2;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid #dce3ed;
+  border-radius: 9px;
+  outline: none;
+  color: #182230;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+input {
+  height: 38px;
+  padding: 0 11px;
+}
+
+textarea {
+  min-height: 128px;
+  padding: 11px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #a0a9b7;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #5377ec;
+  box-shadow: 0 0 0 3px rgba(83, 119, 236, 0.13);
+}
+
+.field-hint {
+  margin: -2px 0 5px;
+  color: #78859a;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 9px;
+  color: white;
+  background: #3158d8;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 5px 12px rgba(49, 88, 216, 0.16);
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.primary-button:hover {
+  background: #2448bf;
+}
+
+.primary-button:active {
+  transform: translateY(1px);
+}
+
+.result-panel {
+  margin-top: 17px;
+  padding: 13px;
+  border: 1px solid #cddcfb;
+  border-radius: 11px;
+  background: #eef4ff;
+}
+
+.result-panel[hidden] {
+  display: none;
+}
+
+.result-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.result-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 9px;
+  color: #2854c5;
+  background: #dce8ff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.result-heading .eyebrow {
+  margin-bottom: 2px;
+}
+
+.result-heading h2 {
+  margin: 0;
+  font-size: 13px;
+}
+
+#result-copy {
+  margin: 11px 0 8px;
+  color: #42516a;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.result-meta {
+  margin: 0;
+  color: #697995;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 20px;
+  color: #8490a2;
+  font-size: 10px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9aa6b7;
+}
