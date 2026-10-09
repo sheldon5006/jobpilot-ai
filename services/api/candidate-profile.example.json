@@ -94,7 +94,7 @@
   "constraints": [
     "Do not invent qualifications, employment dates, language levels, work authorisation, certifications, or achievements.",
     "List only certifications and licences actually held; add current validity or expiry details when relevant.",
-    "Set workAuthorization only to an accurate, country-specific statement. Leave it as a placeholder until verified."
+    "Set workAuthorization only to an accurate, country-specific statement. Leave it as a placeholder until verified.",
     "Ask me to verify any mandatory requirement that is not established by this profile."
   ]
 }
