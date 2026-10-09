@@ -460,7 +460,12 @@ public static class JobRequirementRuleEngine
             }
         }
 
-        var periodMonths = GetExperienceMonthsFromPeriods(profile.Experience);
+        // Do not treat internship periods as professional experience when enforcing
+        // an explicitly stated professional-experience threshold.
+        var professionalHistory = (profile.Experience ?? [])
+            .Where(entry => !(entry.Role ?? string.Empty).Contains("intern", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var periodMonths = GetExperienceMonthsFromPeriods(professionalHistory);
         if (summaryMonths.HasValue && periodMonths.HasValue)
         {
             return Math.Max(summaryMonths.Value, periodMonths.Value);
@@ -552,21 +557,40 @@ public static class JobRequirementRuleEngine
             System.Globalization.DateTimeStyles.None,
             out date);
 
-    private static string BuildExperienceEvidence(CandidateProfile profile, int months)
+    private static MatchedRequirement BuildExperienceMatch(
+        CandidateProfile profile,
+        string requirement,
+        int months)
     {
-        var periodMonths = GetExperienceMonthsFromPeriods(profile.Experience);
+        var catalog = ProfileEvidenceCatalog.Create(profile);
+        var professionalHistory = (profile.Experience ?? [])
+            .Where(entry => !(entry.Role ?? string.Empty).Contains("intern", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var periodMonths = GetExperienceMonthsFromPeriods(professionalHistory);
+
+        List<ProfileEvidenceFact> facts;
         if (periodMonths.HasValue && periodMonths.Value >= months)
         {
-            return $"The dated entries in the candidate profile establish approximately {months / 12.0:0.0} years of professional experience.";
+            facts = catalog
+                .Where(fact => fact.Id.StartsWith("DATE-", StringComparison.OrdinalIgnoreCase) &&
+                               fact.Category == "professional_experience")
+                .ToList();
         }
-
-        var summary = profile.ProfessionalSummary?.Trim() ?? string.Empty;
-        if (SummaryExperienceAmount.IsMatch(summary))
+        else
         {
-            return $"Candidate professional summary states: '{summary}'.";
+            var summary = profile.ProfessionalSummary?.Trim() ?? string.Empty;
+            facts = SummaryExperienceAmount.IsMatch(summary)
+                ? catalog.Where(fact => fact.Category == "professional_summary" &&
+                                        string.Equals(fact.Text, summary, StringComparison.OrdinalIgnoreCase)).ToList()
+                : [];
         }
 
-        return $"The dated entries in the candidate profile establish approximately {months / 12.0:0.0} years of professional experience.";
+        return new MatchedRequirement
+        {
+            Requirement = requirement,
+            Evidence = string.Join(" ", facts.Select(fact => fact.Text)),
+            EvidenceIds = facts.Select(fact => fact.Id).ToList()
+        };
     }
 
     private static void ApplyCredentialRequirements(
@@ -1026,6 +1050,25 @@ public static class JobRequirementRuleEngine
         }
 
         return $"{existing.TrimEnd()} {addition}";
+    }
+
+    private static MatchedRequirement CreateProfileFactMatch(
+        CandidateProfile profile,
+        string requirement,
+        string category,
+        Func<ProfileEvidenceFact, bool> predicate)
+    {
+        var facts = ProfileEvidenceCatalog.Create(profile)
+            .Where(fact => string.Equals(fact.Category, category, StringComparison.OrdinalIgnoreCase))
+            .Where(predicate)
+            .ToList();
+
+        return new MatchedRequirement
+        {
+            Requirement = requirement,
+            Evidence = string.Join(" ", facts.Select(fact => fact.Text)),
+            EvidenceIds = facts.Select(fact => fact.Id).ToList()
+        };
     }
 
     private static void AddQuestionIfMissing(JobAnalysisResult result, string language, string question)
