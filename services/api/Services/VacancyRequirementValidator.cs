@@ -22,10 +22,6 @@ public static class VacancyRequirementValidator
         @"\b(?:certification|certificate|certified|credential|licen[cs]e|security[\s-]+clearance|forklift[\s-]+licen[cs]e)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    private static readonly Regex LanguageTopic = new(
-        @"\b(?:German|Deutsch(?:kenntnisse)?|English|Englisch(?:kenntnisse)?|CEFR|proficiency|language)\b",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
     private static readonly Regex SecurityClearanceTopic = new(
         @"\bsecurity[\s-]+clearance\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -151,17 +147,12 @@ public static class VacancyRequirementValidator
             }
 
             if (isCredentialRequirement &&
-                token is "certification" or "certificate" or "certified" or "credential" or "licence" or "license")
+                (token is "certification" or "certificate" or "certified" or "credential" or "licence" or "license"))
             {
                 continue;
             }
 
-            if (isSecurityClearance && token is "security" or "clearance")
-            {
-                continue;
-            }
-
-            if (isCredentialRequirement && token is "certification" or "certificate" or "certified" or "credential")
+            if (isSecurityClearance && (token is "security" or "clearance"))
             {
                 continue;
             }
