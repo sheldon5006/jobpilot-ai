@@ -294,9 +294,9 @@ textarea:focus {
 
 .score-summary {
   display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin: 13px 0;
+  margin: 13px 0 10px;
 }
 
 .score-card {
@@ -322,26 +322,48 @@ textarea:focus {
   font-size: 9px;
 }
 
-.english-summary {
-  padding: 9px 10px;
-  border: 1px solid #d9e4fb;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.65);
-}
-
-.result-panel h3 {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.english-summary p,
 .result-copy {
   margin: 0;
   color: #42516a;
   font-size: 11px;
-  line-height: 1.55;
+  line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.fit-verdict {
+  padding: 10px 11px;
+  border: 1px solid #d9e4fb;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.fit-verdict.strong-fit {
+  border-color: #b6e1c7;
+  color: #17633a;
+  background: #edfbf2;
+}
+
+.fit-verdict.not-strong-fit {
+  border-color: #e8d59e;
+  color: #775714;
+  background: #fff8e5;
+}
+
+.fit-verdict.error-copy {
+  border-color: #f0cccc;
+  color: #933434;
+  background: #fff;
+}
+
+.result-disclaimer {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #d9e4fb;
+  color: #68758b;
+  font-size: 9px;
+  line-height: 1.45;
 }
 
 .result-section {
@@ -464,6 +486,27 @@ footer {
   gap: 10px;
 }
 .page-tools-heading .eyebrow { margin-bottom: 3px; }
+.page-tools-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.collapse-button {
+  padding: 5px 7px;
+  border: 1px solid #d8e1f2;
+  border-radius: 7px;
+  color: #3158d8;
+  background: #fff;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+.collapse-button:hover {
+  background: #edf2ff;
+}
+#page-tools-content[hidden] {
+  display: none;
+}
 .page-tools-heading h2 {
   margin: 0;
   font-size: 14px;
@@ -565,5 +608,5 @@ footer {
   .app-shell { padding: 13px; }
   .intro { margin: 19px 0 16px; }
   .intro h2 { font-size: 21px; }
-  .score-summary { grid-template-columns: 74px minmax(0,1fr); }
+  .score-summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
