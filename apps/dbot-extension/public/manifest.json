@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "DBot — Job Assistant",
+  "version": "0.1.0",
+  "description": "Evaluate job descriptions against your profile and prepare tailored applications.",
+  "action": {
+    "default_title": "Open DBot Job Assistant",
+    "default_popup": "popup.html"
+  }
+}
