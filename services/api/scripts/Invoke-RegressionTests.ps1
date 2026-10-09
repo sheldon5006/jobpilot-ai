@@ -130,12 +130,12 @@ function Test-EvidenceGroundedInProfile {
             $anchorTokens | Where-Object { $evidenceTokens -contains $_ }
         ).Count
 
-        $coverage = $overlap / [double]$anchorTokens.Count
-        $minimumOverlap = [math]::Min(3, $anchorTokens.Count)
+        # Measure coverage of the model's claim, not of the entire (often longer) profile sentence.
+        # A concise paraphrase can be grounded even when the profile includes extra details.
+        $evidenceCoverage = $overlap / [double]$evidenceTokens.Count
+        $minimumOverlap = [math]::Min(3, $evidenceTokens.Count)
 
-        # Short paraphrases can omit extra details present in a longer profile anchor.
-        # Require at least three shared meaningful tokens, but allow 60% coverage.
-        if ($overlap -ge $minimumOverlap -and $coverage -ge 0.6) {
+        if ($overlap -ge $minimumOverlap -and $evidenceCoverage -ge 0.65) {
             return $true
         }
     }
@@ -185,14 +185,14 @@ $cases = @(
     }
 )
 
-function Get-TransientHttpStatusCode {
+function Get-ApiHttpStatusCode {
     param([Parameter(Mandatory)]$ErrorRecord)
 
     try {
         $response = $ErrorRecord.Exception.Response
         if ($null -ne $response -and $null -ne $response.StatusCode) {
             $statusCode = [int]$response.StatusCode
-            if ($statusCode -in @(502, 503, 504)) {
+            if ($statusCode -in @(429, 502, 503, 504)) {
                 return $statusCode
             }
         }
@@ -200,7 +200,7 @@ function Get-TransientHttpStatusCode {
         # Fall through to the platform error message below.
     }
 
-    if ($ErrorRecord.Exception.Message -match '\((502|503|504)\)\s*(?:Bad Gateway|Service Unavailable|Gateway Timeout)') {
+    if ($ErrorRecord.Exception.Message -match '\((429|502|503|504)\)\s*(?:Too Many Requests|Bad Gateway|Service Unavailable|Gateway Timeout)') {
         return [int]$Matches[1]
     }
 
@@ -219,6 +219,7 @@ function Invoke-JobAnalysis {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $maxAttempts = $TransientRetries + 1
     $lastError = ""
+    $lastStatusCode = 0
 
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
         try {
@@ -230,10 +231,12 @@ function Invoke-JobAnalysis {
                 Result = $result
                 Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 2)
                 Error = ""
+                StatusCode = 0
             }
         } catch {
             $lastError = $_.Exception.Message
-            $statusCode = Get-TransientHttpStatusCode -ErrorRecord $_
+            $statusCode = Get-ApiHttpStatusCode -ErrorRecord $_
+            $lastStatusCode = $statusCode
 
             if ($statusCode -in @(502, 503, 504) -and $attempt -lt $maxAttempts) {
                 $delaySeconds = [math]::Pow(2, $attempt - 1)
@@ -248,6 +251,7 @@ function Invoke-JobAnalysis {
                 Result = $null
                 Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 2)
                 Error = $lastError
+                StatusCode = $statusCode
             }
         }
     }
@@ -258,6 +262,7 @@ function Invoke-JobAnalysis {
         Result = $null
         Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 2)
         Error = $lastError
+        StatusCode = $lastStatusCode
     }
 }
 function Get-QualityIssues {
@@ -490,6 +495,7 @@ function Test-ExpectedScenario {
 
 $summary = [System.Collections.Generic.List[object]]::new()
 $allIssues = [System.Collections.Generic.List[string]]::new()
+$inconclusiveIssues = [System.Collections.Generic.List[string]]::new()
 $scoreSamples = @{}
 foreach ($case in $cases) {
     $scoreSamples[$case.Name] = [System.Collections.Generic.List[int]]::new()
@@ -503,16 +509,29 @@ foreach ($case in $cases) {
 
     $call = Invoke-JobAnalysis -Case $case
     if (-not $call.Success) {
-        $summary.Add([pscustomobject]@{
-            Test = $case.Name
-            Status = "REQUEST FAILED"
-            Recommendation = ""
-            Score = $null
-            Gaps = $null
-            Seconds = $call.Seconds
-        })
-        $allIssues.Add("$($case.Name): REQUEST FAILED after $($call.Seconds)s - $($call.Error)")
-        Write-Host $call.Error -ForegroundColor Red
+        if ($call.StatusCode -eq 429) {
+            $summary.Add([pscustomobject]@{
+                Test = $case.Name
+                Status = "THROTTLED"
+                Recommendation = ""
+                Score = $null
+                Gaps = $null
+                Seconds = $call.Seconds
+            })
+            $inconclusiveIssues.Add("$($case.Name): Gemini rate limit (HTTP 429); scenario result could not be evaluated.")
+            Write-Host "Gemini rate limit reached (HTTP 429); this scenario is inconclusive, not a rule failure." -ForegroundColor Yellow
+        } else {
+            $summary.Add([pscustomobject]@{
+                Test = $case.Name
+                Status = "REQUEST FAILED"
+                Recommendation = ""
+                Score = $null
+                Gaps = $null
+                Seconds = $call.Seconds
+            })
+            $allIssues.Add("$($case.Name): REQUEST FAILED after $($call.Seconds)s - $($call.Error)")
+            Write-Host $call.Error -ForegroundColor Red
+        }
         continue
     }
 
@@ -550,7 +569,10 @@ foreach ($case in $cases) {
     })
 }
 
-if (-not $SkipScoreStability -and $summary.Count -ge 3) {
+$coreScenariosReady = $summary.Count -ge 3 -and
+    @($summary | Select-Object -First 3 | Where-Object { $_.Status -ne "PASS" }).Count -eq 0
+
+if (-not $SkipScoreStability -and $coreScenariosReady) {
     Write-Host ""
     Write-Host "Checking score stability for the three core scenarios..." -ForegroundColor Cyan
 
@@ -561,8 +583,13 @@ if (-not $SkipScoreStability -and $summary.Count -ge 3) {
         for ($repeat = 2; $repeat -le 3; $repeat++) {
             $call = Invoke-JobAnalysis -Case $stabilityCase
             if (-not $call.Success) {
-                $allIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat failed after $($call.Seconds)s - $($call.Error)")
-                Write-Host "Repeat $repeat failed: $($call.Error)" -ForegroundColor Red
+                if ($call.StatusCode -eq 429) {
+                    $inconclusiveIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat was skipped because Gemini returned HTTP 429.")
+                    Write-Host "Repeat $repeat inconclusive: Gemini rate limit (HTTP 429)." -ForegroundColor Yellow
+                } else {
+                    $allIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat failed after $($call.Seconds)s - $($call.Error)")
+                    Write-Host "Repeat $repeat failed: $($call.Error)" -ForegroundColor Red
+                }
                 continue
             }
 
@@ -580,7 +607,7 @@ if (-not $SkipScoreStability -and $summary.Count -ge 3) {
         }
 
         $scores = @($scoreSamples[$stabilityCase.Name].ToArray())
-        if ($scores.Count -ge 2) {
+        if ($scores.Count -eq 3) {
             $minScore = ($scores | Measure-Object -Minimum).Minimum
             $maxScore = ($scores | Measure-Object -Maximum).Maximum
             $spread = $maxScore - $minScore
@@ -591,11 +618,17 @@ if (-not $SkipScoreStability -and $summary.Count -ge 3) {
             } else {
                 Write-Host "Score stability: PASS (spread within $ScoreTolerance points)." -ForegroundColor Green
             }
+        } else {
+            Write-Host "Score stability: INCONCLUSIVE ($($scores.Count)/3 responses available)." -ForegroundColor Yellow
         }
     }
 } elseif ($SkipScoreStability) {
     Write-Host ""
     Write-Host "Score stability check skipped by request." -ForegroundColor DarkYellow
+} elseif (-not $coreScenariosReady) {
+    $inconclusiveIssues.Add("Score stability check was skipped because one or more of the three core scenarios did not pass.")
+    Write-Host ""
+    Write-Host "Score stability check: INCONCLUSIVE because one or more core scenarios did not pass." -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -609,9 +642,29 @@ if ($allIssues.Count -gt 0) {
         Write-Host " - $issue" -ForegroundColor Yellow
     }
 
+    if ($inconclusiveIssues.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Additional inconclusive checks:" -ForegroundColor Yellow
+        foreach ($issue in $inconclusiveIssues) {
+            Write-Host " - $issue" -ForegroundColor Yellow
+        }
+    }
+
     Write-Host ""
-    Write-Host "RESULT: FAIL ($($allIssues.Count) issue(s) detected)." -ForegroundColor Red
+    Write-Host "RESULT: FAIL ($($allIssues.Count) quality issue(s) detected)." -ForegroundColor Red
     exit 1
+}
+
+if ($inconclusiveIssues.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Inconclusive checks:" -ForegroundColor Yellow
+    foreach ($issue in $inconclusiveIssues) {
+        Write-Host " - $issue" -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "RESULT: INCONCLUSIVE. Review the listed provider-limited checks and rerun when available." -ForegroundColor Yellow
+    exit 2
 }
 
 Write-Host ""
