@@ -9,6 +9,8 @@ public sealed class CandidateProfile
     public List<ExperienceEntry> Experience { get; init; } = [];
     public List<string> Education { get; init; } = [];
     public List<LanguageEntry> Languages { get; init; } = [];
+    public string WorkAuthorization { get; init; } = string.Empty;
+    public List<string> Certifications { get; init; } = [];
     public List<string> Constraints { get; init; } = [];
 }
 
