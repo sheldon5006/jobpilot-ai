@@ -125,7 +125,7 @@ Start the API locally and configure the provider you want to evaluate in `appset
 .\services\api\scripts\Invoke-RegressionTests.ps1
 ```
 
-The script tests six scenarios: a strong technical match, preferred German, mandatory German C2, explicit work-authorisation/sponsorship conditions, a mandatory AWS certification, and current enrolment for a Werkstudent role. Eligibility cases adapt to the verified facts in the local profile. It checks recommendations and gaps, allows only expected targeted verification questions, verifies matched requirements against vacancy text, checks evidence against profile facts, and validates the score-calibration explanation.
+The script tests seven scenarios: a strong technical match, preferred German, mandatory German C2, explicit work-authorisation/sponsorship conditions, a mandatory AWS certification, current enrolment for a Werkstudent role, and a minimum-experience threshold. Eligibility cases adapt to the verified facts in the local profile. It checks recommendations and gaps, allows only expected targeted verification questions, verifies matched requirements against vacancy text, checks evidence against profile facts, and validates the score-calibration explanation.
 
 By default, it makes two extra calls for each of the first three scenarios to check score stability. It fails if repeated scores differ by more than 10 points. Skip the extra calls with `-SkipScoreStability`, or choose another tolerance with `-ScoreTolerance 15`.
 
