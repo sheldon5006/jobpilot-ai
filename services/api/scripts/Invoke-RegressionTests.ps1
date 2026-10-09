@@ -115,32 +115,38 @@ function Test-EvidenceGroundedInProfile {
         [Parameter(Mandatory)][string[]]$Anchors
     )
 
-    $evidenceTokens = @(Get-NormalizedTokens $Evidence)
-    if ($evidenceTokens.Count -lt 3) {
+    # Evidence is often a concise paraphrase assembled from several profile facts.
+    # Compare its substantive terms with the profile as a whole, rather than requiring
+    # every paraphrase to match one long source sentence word-for-word.
+    $genericEvidenceWords = @(
+        "professional", "practical", "relevant", "commercial", "work", "working",
+        "experience", "experienced", "using", "knowledge", "demonstrated", "hands",
+        "develop", "development", "developing", "developed", "develops",
+        "utilize", "utilized", "utilizing", "utilizes", "candidate"
+    )
+
+    $evidenceTokens = @(
+        Get-NormalizedTokens $Evidence |
+            Where-Object { $genericEvidenceWords -notcontains $_ }
+    )
+    if ($evidenceTokens.Count -eq 0) {
         return $false
     }
 
-    foreach ($anchor in $Anchors) {
-        $anchorTokens = @(Get-NormalizedTokens $anchor)
-        if ($anchorTokens.Count -eq 0) {
-            continue
+    $profileTokens = @(
+        foreach ($anchor in $Anchors) {
+            Get-NormalizedTokens $anchor
         }
+    ) | Sort-Object -Unique
 
-        $overlap = @(
-            $anchorTokens | Where-Object { $evidenceTokens -contains $_ }
-        ).Count
+    # Every substantive evidence term must appear somewhere in the verified profile.
+    # Common phrasing such as "practical experience developing" is excluded above;
+    # technologies, domains, project terms, levels, and quantities remain checkable.
+    $missingTokens = @(
+        $evidenceTokens | Where-Object { $profileTokens -notcontains $_ }
+    )
 
-        # Measure coverage of the model's claim, not of the entire (often longer) profile sentence.
-        # A concise paraphrase can be grounded even when the profile includes extra details.
-        $evidenceCoverage = $overlap / [double]$evidenceTokens.Count
-        $minimumOverlap = [math]::Min(3, $evidenceTokens.Count)
-
-        if ($overlap -ge $minimumOverlap -and $evidenceCoverage -ge 0.65) {
-            return $true
-        }
-    }
-
-    return $false
+    return ($missingTokens.Count -eq 0)
 }
 
 $cases = @(
