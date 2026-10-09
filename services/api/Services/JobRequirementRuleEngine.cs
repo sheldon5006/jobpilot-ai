@@ -34,7 +34,7 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex WorkAuthorizationTopic = new(
-        @"\b(?:work[\s-]+authori[sz]ation|authori[sz]ed[\s-]+to[\s-]+work|right[\s-]+to[\s-]+work|work[\s-]+permit|visa|sponsorship|residence[\s-]+permit|eligible[\s-]+to[\s-]+work|legally[\s-]+entitled[\s-]+to[\s-]+work)\b",
+        @"\b(?:work[\s-]+authori[sz]ation|authori[sz]ation[\s-]+to[\s-]+work|authori[sz]ed[\s-]+to[\s-]+work|right[\s-]+to[\s-]+work|work[\s-]+permit|visa|sponsorship|residence[\s-]+permit|eligible[\s-]+to[\s-]+work|legally[\s-]+entitled[\s-]+to[\s-]+work|work[\s-]+eligibility)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ExplicitWorkAuthorizationCue = new(
