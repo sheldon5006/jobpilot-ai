@@ -1,16 +1,17 @@
 # DBot Chrome Extension
 
-First milestone: a Manifest V3 popup that accepts a job title, company, and job description, validates the input, and displays a prototype status.
+DBot is the job-description analysis extension inside the JobPilot AI monorepo.
 
 ## Requirements
 
 - Node.js 22 or later
 - npm
-- Google Chrome or another Chromium-based browser that supports Manifest V3
+- Google Chrome or another Chromium-based browser supporting Manifest V3
+- The JobPilot ASP.NET Core API running locally (see `services/api/README.md`)
 
-## Run the type check and build
+## Build
 
-From this directory:
+Run these commands from this directory:
 
 ```powershell
 npm install
@@ -18,23 +19,30 @@ npm run typecheck
 npm run build
 ```
 
-The production extension files are generated in `dist/`.
+The built extension is generated in `dist/`.
 
 ## Load the extension in Chrome
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode**.
 3. Choose **Load unpacked**.
-4. Select this folder's `dist` directory.
+4. Select this directory's `dist` folder.
 5. Pin DBot from the Extensions menu and open it.
 
-After changing code, run `npm run build` again and reload DBot on the extensions page.
+After changing extension code, run `npm run build` again and reload DBot on the extensions page.
 
-## Current limits
+## Run AI analysis locally
 
-- No AI provider or backend is connected.
-- The description is entered manually.
-- No job information is transmitted or persisted.
-- The current submit action validates the input and confirms that the prototype captured it; it does not produce a job-fit score.
+1. Start the API using the instructions in `services/api/README.md`.
+2. Paste a job title, company, and job description into DBot.
+3. Click **Analyze job fit**.
+4. Review the recommendation, fit score, matched requirements, gaps, and questions.
 
-These boundaries are intentional for the first milestone.
+The extension sends the job description to the local API only when you click Analyze. The API also sends the configured candidate profile and job description to Gemini. Free-tier content may be used by Google to improve its products; avoid unnecessary personal identifiers.
+
+## Current boundaries
+
+- The extension does not submit applications.
+- Job and candidate profile information are not persisted by the current API.
+- The API key stays in the backend environment and is never bundled into the extension.
+- The recommendation is decision support, not a prediction of interview success.
