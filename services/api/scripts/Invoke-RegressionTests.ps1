@@ -289,24 +289,73 @@ $cases = @(
 function Get-ApiErrorDetail {
     param([Parameter(Mandatory)]$ErrorRecord)
 
+    # Cache the first read: the response stream can be consumed only once.
+    try {
+        $cached = [string]$ErrorRecord.Exception.Data["JobPilotApiErrorDetail"]
+        if (-not [string]::IsNullOrWhiteSpace($cached)) {
+            return $cached
+        }
+    } catch {
+        # Exception.Data may be unavailable for some error types.
+    }
+
     $body = [string]$ErrorRecord.ErrorDetails.Message
+
+    # Windows PowerShell 5.1 may leave ErrorDetails.Message empty for HTTP errors.
+    # Read the actual response body so ASP.NET Problem Details can expose the Gemini/Ollama cause.
+    if ([string]::IsNullOrWhiteSpace($body)) {
+        try {
+            $response = $ErrorRecord.Exception.Response
+            if ($null -ne $response) {
+                if ($response -is [System.Net.HttpWebResponse]) {
+                    $stream = $response.GetResponseStream()
+                    if ($null -ne $stream) {
+                        $reader = [System.IO.StreamReader]::new($stream)
+                        try {
+                            $body = $reader.ReadToEnd()
+                        } finally {
+                            $reader.Dispose()
+                        }
+                    }
+                } elseif ($null -ne $response.Content) {
+                    $body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                }
+            }
+        } catch {
+            # Keep the original error below if the response body cannot be read.
+        }
+    }
+
+    $detail = ""
     if (-not [string]::IsNullOrWhiteSpace($body)) {
         try {
             $problem = $body | ConvertFrom-Json -ErrorAction Stop
             if (-not [string]::IsNullOrWhiteSpace([string]$problem.detail)) {
-                return ([string]$problem.detail).Trim()
-            }
-            if (-not [string]::IsNullOrWhiteSpace([string]$problem.title)) {
-                return ([string]$problem.title).Trim()
+                $detail = ([string]$problem.detail).Trim()
+            } elseif (-not [string]::IsNullOrWhiteSpace([string]$problem.title)) {
+                $detail = ([string]$problem.title).Trim()
+            } else {
+                $detail = $body.Trim()
             }
         } catch {
             # Some reverse proxies return plain text instead of Problem Details JSON.
+            $detail = $body.Trim()
         }
-
-        return $body.Trim()
     }
 
-    return [string]$ErrorRecord.Exception.Message
+    if ([string]::IsNullOrWhiteSpace($detail)) {
+        $detail = [string]$ErrorRecord.Exception.Message
+    }
+
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($detail)) {
+            $ErrorRecord.Exception.Data["JobPilotApiErrorDetail"] = $detail
+        }
+    } catch {
+        # Caching is best-effort; the parsed result is still returned.
+    }
+
+    return $detail
 }
 
 function Get-ApiHttpStatusCode {
