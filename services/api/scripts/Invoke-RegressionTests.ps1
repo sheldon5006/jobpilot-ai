@@ -152,8 +152,8 @@ function New-ProfileFactCatalog {
         $prefix = if ($isInternship) { "INT" } else { "EXP" }
         $category = if ($isInternship) { "internship_experience" } else { "professional_experience" }
         if (-not (Test-ProfilePlaceholder ([string]$experience.period))) {
-            $roleLabel = if ([string]::IsNullOrWhiteSpace([string]$experience.role)) { "Experience" } else { [string]$experience.role }
-            Add-ProfileFactToCatalog $catalog $counters "DATE" $category ("{0}: {1}" -f $roleLabel, $experience.period)
+            $roleLabel = if ([string]::IsNullOrWhiteSpace([string]$experience.role)) { "Experience" } else { ([string]$experience.role).Trim() }
+            Add-ProfileFactToCatalog $catalog $counters "DATE" $category ("{0}: {1}" -f $roleLabel, ([string]$experience.period).Trim())
         }
         foreach ($item in @($experience.evidence)) {
             Add-ProfileFactToCatalog $catalog $counters $prefix $category ([string]$item)
