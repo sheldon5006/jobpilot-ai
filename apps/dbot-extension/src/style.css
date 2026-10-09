@@ -317,9 +317,77 @@ textarea:focus {
   letter-spacing: -0.04em;
 }
 
-.score-card span {
+.score-card span,
+.score-card-label {
   color: #697995;
   font-size: 9px;
+}
+
+.key-requirements-card {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #d9e4fb;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.score-card-label {
+  display: block;
+  margin-bottom: 7px;
+  font-weight: 700;
+}
+
+.requirement-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.requirement-chip {
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #cddcfb;
+  border-radius: 6px;
+  color: #294582;
+  background: #eef4ff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.requirement-chip.empty-requirement {
+  border-style: dashed;
+  color: #78859a;
+  background: #f8faff;
+  font-weight: 500;
+}
+
+.role-summary-card {
+  margin: 0 0 10px;
+  padding: 10px 11px;
+  border: 1px solid #d9e4fb;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.role-summary-card h3 {
+  margin: 0 0 6px;
+  color: #33445f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.role-summary-card p {
+  margin: 0;
+  color: #42516a;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .result-copy {
