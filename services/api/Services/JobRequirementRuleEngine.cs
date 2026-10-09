@@ -22,7 +22,7 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ExplicitExperienceDuration = new(
-        @"\b(?:\d+\+?|one|two|three|four|five|six|seven|eight|nine|ten|several|multiple)\s+(?:years?|months?)(?:['’]s?)?\s+(?:of\s+)?(?:(?:work|relevant|professional|commercial|practical)\s+)?experience\b|\bexperience\b.{0,45}\b(?:\d+\+?|one|two|three|four|five|six|seven|eight|nine|ten|several|multiple)\s+(?:years?|months?)\b",
+        @"\b(?:\d+\+?|one|two|three|four|five|six|seven|eight|nine|ten|several|multiple)\s+(?:years?|months?)(?:['’]s?)?\s+(?:of\s+)?(?:(?:work|relevant|professional|commercial|practical)\s+)*experience\b|\bexperience\b.{0,45}\b(?:\d+\+?|one|two|three|four|five|six|seven|eight|nine|ten|several|multiple)\s+(?:years?|months?)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex EmploymentMetadataGap = new(
