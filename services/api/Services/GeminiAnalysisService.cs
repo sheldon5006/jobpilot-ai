@@ -186,19 +186,18 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             _ => "Review"
         };
 
-        // If AI recommends applying but also reports unresolved questions or a must-have gap,
-        // downgrade to Review. This is advice only; final decisions remain with the user.
+        // A job-related mandatory gap blocks Apply. Generic follow-up questions alone do not.
         var hasMustHaveGap = result.Gaps.Any(g =>
             g is not null &&
             string.Equals(g.Severity, "Must-have", StringComparison.OrdinalIgnoreCase));
-        if (result.Recommendation == "Apply" &&
-            (result.QuestionsToVerify.Count > 0 || hasMustHaveGap))
+        if (result.Recommendation == "Apply" && hasMustHaveGap)
         {
             result.Recommendation = "Review";
             result.Rationale =
-                $"{result.Rationale} DBot downgraded the recommendation to Review because a must-have gap or unresolved question needs checking.";
+                $"{result.Rationale} DBot downgraded the recommendation to Review because a mandatory requirement remains unverified.";
         }
 
+        JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
         return result;
