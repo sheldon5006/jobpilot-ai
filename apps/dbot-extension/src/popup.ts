@@ -308,6 +308,16 @@ async function analyzeCurrentJob(): Promise<void> {
   }
 }
 
+async function getActiveTabIdInCurrentWindow(): Promise<number> {
+  // Resolve the tab from the side panel's own browser window rather than
+  // asking the background service worker to guess the last-focused window.
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id === undefined) {
+    throw new Error("DBot could not identify the active tab in this browser window. Keep the job page and DBot side panel in the same Chrome window, then try again.");
+  }
+  return tab.id;
+}
+
 async function requestSettings(): Promise<void> {
   try {
     const response = (await chrome.runtime.sendMessage({ type: "DBOT_GET_SETTINGS" })) as SettingsResponse;
@@ -319,7 +329,11 @@ async function requestSettings(): Promise<void> {
     autoAnalyzeToggle.checked = settings.autoAnalyzeEnabled;
     autoAnalyzeToggle.disabled = !settings.autoFetchEnabled;
     if (settings.autoFetchEnabled && response.allSitesPermission) {
-      const result = (await chrome.runtime.sendMessage({ type: "DBOT_FETCH_CURRENT_PAGE" })) as FetchResponse;
+      const tabId = await getActiveTabIdInCurrentWindow();
+      const result = (await chrome.runtime.sendMessage({
+        type: "DBOT_FETCH_CURRENT_PAGE",
+        tabId
+      })) as FetchResponse;
       if (result?.ok && result.job) {
         await applyDetectedJob(result.job, settings.autoAnalyzeEnabled, "auto");
       } else if (result?.error) {
@@ -336,7 +350,11 @@ async function fetchCurrentPage(): Promise<void> {
   fetchPageButton.textContent = "Reading page HTML…";
   setPageStatus("Looking for structured job data and visible job-description content…", "info");
   try {
-    const response = (await chrome.runtime.sendMessage({ type: "DBOT_FETCH_CURRENT_PAGE" })) as FetchResponse;
+    const tabId = await getActiveTabIdInCurrentWindow();
+    const response = (await chrome.runtime.sendMessage({
+      type: "DBOT_FETCH_CURRENT_PAGE",
+      tabId
+    })) as FetchResponse;
     if (!response?.ok || !response.job) {
       throw new Error(response?.error || "Could not fetch the current page.");
     }
@@ -497,7 +515,7 @@ chrome.runtime.onMessage.addListener((message: { type: string; tabId?: number; m
   }
 
   if (message.type === "DBOT_PAGE_SCAN_FAILED") {
-    void chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.id === message.tabId && message.message) setPageStatus(message.message, "error");
     });
     return;
