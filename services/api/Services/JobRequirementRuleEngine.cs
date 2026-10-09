@@ -81,6 +81,10 @@ public static class JobRequirementRuleEngine
         @"\b(?:currently\s+enrolled|must\s+be\s+enrolled|enrolled\s+(?:at|in)\s+(?:a\s+)?(?:university|college|higher\s+education\s+institution)|active\s+student\s+status|only\s+(?:current\s+)?students|current\s+university\s+student)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex StudentEnrollmentEntryTopic = new(
+        @"\b(?:werkstudent(?:in)?|working\s+student|currently\s+enrolled|must\s+be\s+enrolled|enrolled|enrolment|enrollment|student\s+status|current\s+student|university\s+student|currently\s+studying|still\s+studying)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex StudentEnrollmentProfileCue = new(
         @"\b(?:in\s+progress|ongoing|currently\s+studying|currently\s+enrolled|enrolled|expected\s+graduation|expected\s+completion)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -303,7 +307,7 @@ public static class JobRequirementRuleEngine
 
         AddGap(
             result,
-            "Right to work in the role's country / sponsorship eligibility",
+            authorizationRequirement,
             "Must-have",
             "Unverified",
             "The profile contains a work-status statement, but it does not establish eligibility for this specific country and sponsorship condition.");
@@ -704,13 +708,10 @@ public static class JobRequirementRuleEngine
             : titleMatch.Value.Trim();
 
         result.MatchedRequirements.RemoveAll(item =>
-            item is not null && StudentEnrollmentCue.IsMatch(item.Requirement ?? string.Empty) ||
-            item is not null && StudentRoleCue.IsMatch(item.Requirement ?? string.Empty));
+            item is not null && StudentEnrollmentEntryTopic.IsMatch(item.Requirement ?? string.Empty));
         result.Gaps.RemoveAll(gap =>
-            gap is not null && (StudentEnrollmentCue.IsMatch(gap.Requirement ?? string.Empty) ||
-                                StudentRoleCue.IsMatch(gap.Requirement ?? string.Empty)));
-        result.QuestionsToVerify.RemoveAll(question =>
-            StudentEnrollmentCue.IsMatch(question) || StudentRoleCue.IsMatch(question));
+            gap is not null && StudentEnrollmentEntryTopic.IsMatch(gap.Requirement ?? string.Empty));
+        result.QuestionsToVerify.RemoveAll(question => StudentEnrollmentEntryTopic.IsMatch(question));
 
         var educationEvidence = profile.Education?.FirstOrDefault(education =>
             !IsPlaceholder(education ?? string.Empty) &&
