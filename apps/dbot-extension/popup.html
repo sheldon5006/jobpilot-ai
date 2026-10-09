@@ -11,45 +11,31 @@
     <main class="app-shell">
       <header class="app-header">
         <div class="brand-mark" aria-hidden="true">D</div>
-        <div>
+        <div class="brand-copy">
           <p class="eyebrow">JOBPILOT AI</p>
           <h1>DBot <span>Job Assistant</span></h1>
         </div>
-        <span class="version-tag">0.3.0</span>
+        <div class="header-actions">
+          <button id="toggle-page-tools-button" class="header-toggle-button" type="button" aria-controls="page-tools-content" aria-expanded="false" aria-label="Show page detection settings" title="Show or hide page detection settings">Tools</button>
+          <span class="version-tag">0.3.0</span>
+        </div>
       </header>
 
-      <section class="intro" aria-labelledby="intro-title">
-        <p class="eyebrow">AI JOB ANALYSIS</p>
-        <h2 id="intro-title">Is this role right for you?</h2>
-        <p>Keep DBot beside the page while you browse. Fetch job details from the current page or let DBot detect them for you.</p>
+      <section class="manual-fetch-area" aria-label="Manual page scan">
+        <button id="fetch-current-page-button" class="secondary-button" type="button">↧ Fetch job details from page</button>
+        <p id="page-fetch-status" class="page-fetch-status" role="status">Ready. Select a job listing and fetch its details.</p>
       </section>
 
-      <section class="page-tools" aria-labelledby="page-tools-title">
-        <div class="page-tools-heading">
-          <div>
-            <p class="eyebrow">CURRENT WEBPAGE</p>
-            <h2 id="page-tools-title">Fetch job details</h2>
-          </div>
-          <div class="page-tools-actions">
-            <button id="toggle-page-tools-button" class="collapse-button" type="button" aria-controls="page-tools-content" aria-expanded="true">Hide</button>
-            <span class="page-tools-icon" aria-hidden="true">↧</span>
-          </div>
-        </div>
-        <div id="page-tools-content">
-          <p class="page-tools-description">Read the job title, company and description from the current page HTML. Check the details before analysing.</p>
-          <button id="fetch-current-page-button" class="secondary-button" type="button">↧ Fetch from current page</button>
-          <p id="page-fetch-status" class="page-fetch-status" role="status">Ready to inspect the current tab when you choose Fetch.</p>
-          <div class="settings-divider"></div>
-          <label class="setting-row" for="auto-fetch-toggle">
-            <input id="auto-fetch-toggle" type="checkbox" />
-            <span><strong>Auto-fetch on page changes</strong><small>When enabled, DBot checks pages you visit for job details.</small></span>
-          </label>
-          <label class="setting-row" for="auto-analyze-toggle">
-            <input id="auto-analyze-toggle" type="checkbox" disabled />
-            <span><strong>Auto-analyse detected jobs</strong><small>Automatically send a detected job and your configured profile to the AI provider.</small></span>
-          </label>
-          <p class="permission-note">Automatic fetching asks for your permission to read pages on HTTP/HTTPS sites. You can leave it off and fetch only the current tab when you need it. DBot does not submit applications.</p>
-        </div>
+      <section id="page-tools-content" class="page-tools-settings" aria-label="Page detection settings" hidden>
+        <label class="setting-row" for="auto-fetch-toggle">
+          <input id="auto-fetch-toggle" type="checkbox" />
+          <span><strong>Auto-fetch on page changes</strong><small>Watch the selected job details on LinkedIn and fetch again when the job changes.</small></span>
+        </label>
+        <label class="setting-row" for="auto-analyze-toggle">
+          <input id="auto-analyze-toggle" type="checkbox" disabled />
+          <span><strong>Auto-analyse detected jobs</strong><small>Automatically send a detected job and your configured profile to the AI provider.</small></span>
+        </label>
+        <p class="permission-note">Automatic fetching needs permission to read HTTP/HTTPS pages. Turn it off to use only the manual fetch button. DBot does not submit applications.</p>
       </section>
 
       <form id="job-form">
