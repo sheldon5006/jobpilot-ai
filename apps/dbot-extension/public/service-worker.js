@@ -323,7 +323,7 @@ async function maybeAutoFetch(tabId, tabUrl) {
   } catch {
     return;
   }
-  if (!/^https?:\\/\\//i.test(url)) return;
+  if (!/^https?:\/\//i.test(url)) return;
 
   inProgressTabs.add(tabId);
   try {
