@@ -73,7 +73,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             - englishSummary: concise English summary of the role and important requirements
             - summary: concise explanation of the overall fit
             - matchedRequirements: array of objects with "requirement" and "evidence"
-            - gaps: array of objects with "requirement", "severity" ("Must-have", "Preferred", or "Unknown"), and "explanation"
+            - gaps: array of objects with "requirement", "severity" ("Must-have", "Preferred", or "Unknown"), "status" ("Unverified" or "Unmet"), and "explanation"
             - questionsToVerify: array of questions the candidate should resolve before applying
             - rationale: explain the recommendation with concrete evidence from the profile
 
@@ -186,17 +186,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             _ => "Review"
         };
 
-        // A job-related mandatory gap blocks Apply. Generic follow-up questions alone do not.
-        var hasMustHaveGap = result.Gaps.Any(g =>
-            g is not null &&
-            string.Equals(g.Severity, "Must-have", StringComparison.OrdinalIgnoreCase));
-        if (result.Recommendation == "Apply" && hasMustHaveGap)
-        {
-            result.Recommendation = "Review";
-            result.Rationale =
-                $"{result.Rationale} DBot downgraded the recommendation to Review because a mandatory requirement remains unverified.";
-        }
-
+        JobRequirementRuleEngine.Apply(request, profile, result);
         JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
