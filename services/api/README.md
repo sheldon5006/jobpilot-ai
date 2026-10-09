@@ -18,7 +18,7 @@ Copy-Item candidate-profile.example.json candidate-profile.json
 
 Edit `candidate-profile.json` with your accurate experience, dates, qualifications, skills, languages, and constraints. This file is intentionally ignored by Git: it can contain personal information. Never put your real profile in the example file or commit the local profile.
 
-The API reads it from the API content directory by default. Override the path with `DBOT_PROFILE_PATH` if needed.
+On first startup, the API imports this file into the database if no saved profile exists. After import, the database is the source of truth; use the dashboard's **My Profile** editor to make changes. Editing the JSON afterward will not overwrite the saved profile. `DBOT_PROFILE_PATH` can change the source path used for that initial import.
 
 ## 2. Configure the AI provider
 
@@ -90,7 +90,7 @@ These weights are a transparent heuristic, not a statistically validated probabi
 
 ## 3. Saved job history and dashboard
 
-The API creates a local SQLite database at `services/api/jobpilot.db` by default. The file is ignored by Git. A successful analysis from either DBot or the dashboard is saved automatically, including the job description, fit score, recommendation, matched requirements, gaps, and questions. The dashboard can update application status and notes.
+The API creates a local SQLite database at `services/api/jobpilot.db` by default. The file is ignored by Git. A successful analysis from either DBot or the dashboard is saved automatically, including the job description, fit score, recommendation, matched requirements, gaps, and questions. The database also stores the editable candidate profile and optional CV attachment for each saved job. The dashboard can update application status and notes.
 
 Available endpoints:
 
@@ -132,8 +132,10 @@ Invoke-RestMethod http://127.0.0.1:5080/api/health
 ## Endpoints
 
 - `GET /api/health` — local health check.
+- `GET /api/profile`, `PUT /api/profile` — view and update the career profile used for analysis.
 - `GET /api/jobs`, `GET /api/jobs/{id}`, and `PUT /api/jobs/{id}` — saved job history and tracker.
-- `POST /api/jobs/analyze` — analyses a supplied job description against the local candidate profile and saves the result.
+- `POST /api/jobs/analyze` — analyses a supplied job description against the saved candidate profile and saves the result.
+- `POST /api/jobs/{id}/cv`, `GET /api/jobs/{id}/cv`, `DELETE /api/jobs/{id}/cv` — upload, download, or remove the CV associated with one saved job.
 
 Example request:
 
@@ -173,7 +175,7 @@ The quality checks are development guardrails for these controlled scenarios, no
 
 ## Current boundaries
 
-- Successful analyses and their job descriptions are stored in the configured database. The candidate profile is read from its local configured JSON file and is not written to the saved-job database.
+- Successful analyses, their job descriptions, the editable candidate profile, and attached per-job CV files are stored in the configured database. The local JSON profile is only the initial import source.
 - In Gemini mode, the Gemini key stays on the backend and is never returned to the browser.
 - Analysis is decision support only. It does not submit applications.
 - If required profile facts are unknown, the model should flag them for review.
