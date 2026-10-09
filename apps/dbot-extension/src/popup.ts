@@ -75,7 +75,6 @@ const API_BASE_URL = "http://127.0.0.1:5080";
 const ALL_HTTP_ORIGINS = ["http://*/*", "https://*/*"];
 const autoAnalyzedUrls = new Set<string>();
 let settings: DbotSettings = { autoFetchEnabled: false, autoAnalyzeEnabled: false };
-let activeJobUrl = "";
 
 function element<T extends HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -361,7 +360,6 @@ async function applyDetectedJob(
   companyInput.value = job.company || companyInput.value;
   descriptionInput.value = job.description;
   descriptionInput.setCustomValidity("");
-  activeJobUrl = job.url;
 
   let displayHost = job.url;
   try {
@@ -483,7 +481,7 @@ autoAnalyzeToggle.addEventListener("change", async () => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message: DetectionMessage | { type: string; tabId?: number; message?: string }) => {
+chrome.runtime.onMessage.addListener((message: { type: string; tabId?: number; message?: string; job?: ExtractedJobDetails; source?: "auto"; autoAnalyze?: boolean }) => {
   if (message.type === "DBOT_SETTINGS_CHANGED") {
     void requestSettings();
     return;
@@ -499,8 +497,8 @@ chrome.runtime.onMessage.addListener((message: DetectionMessage | { type: string
   if (message.type === "DBOT_JOB_DETAILS_DETECTED") {
     void chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
       if (tab?.id !== message.tabId) return;
-      const detection = message as DetectionMessage;
-      void applyDetectedJob(detection.job, detection.autoAnalyze, detection.source);
+      if (!message.job) return;
+      void applyDetectedJob(message.job, Boolean(message.autoAnalyze), message.source || "auto");
     });
   }
 });
