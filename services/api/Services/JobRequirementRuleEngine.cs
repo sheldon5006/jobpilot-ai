@@ -86,12 +86,12 @@ public static class JobRequirementRuleEngine
             return string.Empty;
         }
 
-        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
         return string.Join(" ", sentences.Where(sentence =>
             !(EmploymentMetadataGap.IsMatch(sentence) &&
               Regex.IsMatch(
                   sentence,
-                  @"\\b(?:unknown|unverified|placeholder|gap|verify|verified|missing|not specified)\\b",
+                  @"\b(?:unknown|unverified|placeholder|gap|verify|verified|missing|not specified)\b",
                   RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))).Trim();
     }
 
