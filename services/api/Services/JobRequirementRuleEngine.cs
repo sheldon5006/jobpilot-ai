@@ -54,7 +54,7 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ExplicitlyUnauthorised = new(
-        @"\b(?:not\s+(?:currently\s+)?authori[sz]ed|not\s+eligible\s+to\s+work|no\s+legal\s+right\s+to\s+work|does\s+not\s+have\s+(?:the\s+)?right\s+to\s+work)\b",
+        @"\b(?:not\s+(?:currently\s+)?authori[sz]ed|not\s+eligible\s+to\s+work|no\s+legal\s+right\s+to\s+work|does\s+not\s+have\s+(?:the\s+)?(?:right\s+to\s+work|work\s+authori[sz]ation)|no\s+(?:valid\s+)?work\s+permit|not\s+allowed\s+to\s+work)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex CertificationTopic = new(
@@ -415,12 +415,12 @@ public static class JobRequirementRuleEngine
             !question.Contains("relevant professional experience", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static int ParseAmount(string value)
+    private static double ParseAmount(string value)
     {
         if (double.TryParse(value, System.Globalization.NumberStyles.Number,
                 System.Globalization.CultureInfo.InvariantCulture, out var numeric))
         {
-            return (int)Math.Round(numeric, MidpointRounding.AwayFromZero);
+            return numeric;
         }
 
         return value.ToLowerInvariant() switch
@@ -711,7 +711,7 @@ public static class JobRequirementRuleEngine
             item is not null && StudentEnrollmentEntryTopic.IsMatch(item.Requirement ?? string.Empty));
         result.Gaps.RemoveAll(gap =>
             gap is not null && StudentEnrollmentEntryTopic.IsMatch(gap.Requirement ?? string.Empty));
-        result.QuestionsToVerify.RemoveAll(question => StudentEnrollmentEntryTopic.IsMatch(question));
+        result.QuestionsToVerify.RemoveAll(question => StudentEnrollmentEntryTopic.IsMatch(question ?? string.Empty));
 
         var educationEvidence = profile.Education?.FirstOrDefault(education =>
             !IsPlaceholder(education ?? string.Empty) &&
