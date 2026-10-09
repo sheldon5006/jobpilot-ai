@@ -109,6 +109,7 @@ public static class JobRequirementRuleEngine
                     $"The vacancy makes {language} a mandatory requirement, but the candidate profile does not establish a verified proficiency level.");
                 AddQuestionIfMissing(
                     result,
+                    language,
                     $"What is your current {language} proficiency level? Update the candidate profile with an accurate level.");
                 return;
             }
@@ -247,10 +248,10 @@ public static class JobRequirementRuleEngine
         });
     }
 
-    private static void AddQuestionIfMissing(JobAnalysisResult result, string question)
+    private static void AddQuestionIfMissing(JobAnalysisResult result, string language, string question)
     {
         if (!result.QuestionsToVerify.Any(existing =>
-            existing.Contains(question.Split(' ')[3], StringComparison.OrdinalIgnoreCase)))
+            existing.Contains(language, StringComparison.OrdinalIgnoreCase)))
         {
             result.QuestionsToVerify.Add(question);
         }
