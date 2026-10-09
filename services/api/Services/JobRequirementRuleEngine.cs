@@ -42,6 +42,7 @@ public static class JobRequirementRuleEngine
         string language,
         string alternateName)
     {
+        RemoveLanguageNarrative(result, language, alternateName);
         var mentioned = ContainsWord(vacancyText, language) || ContainsWord(vacancyText, alternateName);
 
         // Drop model-invented language requirements if the vacancy does not mention that language.
@@ -96,6 +97,10 @@ public static class JobRequirementRuleEngine
                     "Unmet",
                     $"{language} proficiency does not meet the vacancy's explicitly stated {requiredLevel?.ToString() ?? "mandatory"} requirement based on the candidate profile.");
                 RemoveLanguageQuestions(result, language, alternateName);
+                result.Summary = AppendText(result.Summary,
+                    $"{language} is a mandatory requirement and the candidate profile indicates the required level is not met.");
+                result.Rationale = AppendText(result.Rationale,
+                    $"{language} is a mandatory requirement explicitly contradicted by the candidate profile; the recommendation should not be Apply.");
                 return;
             }
 
@@ -111,6 +116,10 @@ public static class JobRequirementRuleEngine
                     result,
                     language,
                     $"What is your current {language} proficiency level? Update the candidate profile with an accurate level.");
+                result.Summary = AppendText(result.Summary,
+                    $"{language} is a mandatory requirement, but the candidate profile does not establish a verified proficiency level.");
+                result.Rationale = AppendText(result.Rationale,
+                    $"{language} proficiency remains unverified, so the recommendation must be Review until the requirement is confirmed.");
                 return;
             }
 
@@ -120,6 +129,10 @@ public static class JobRequirementRuleEngine
                 Requirement = $"{language} proficiency",
                 Evidence = $"Candidate profile lists {language} proficiency as '{proficiency}'."
             });
+            result.Summary = AppendText(result.Summary,
+                $"{language} proficiency is supported by the candidate profile.");
+            result.Rationale = AppendText(result.Rationale,
+                $"{language} proficiency was matched using the candidate profile, not inferred from the job description.");
             RemoveLanguageQuestions(result, language, alternateName);
             return;
         }
@@ -137,6 +150,10 @@ public static class JobRequirementRuleEngine
                 isUnknown
                     ? $"{language} is preferred in the vacancy, but proficiency is not established in the candidate profile."
                     : $"The candidate profile says {language} is being learned; the preferred language skill is not yet evidenced at a working proficiency level.");
+            result.Summary = AppendText(result.Summary,
+                $"{language} is preferred, and the candidate profile does not show verified working proficiency.");
+            result.Rationale = AppendText(result.Rationale,
+                $"{language} remains a preferred-skill gap; it does not block the application by itself.");
             RemoveLanguageQuestions(result, language, alternateName);
             return;
         }
@@ -146,30 +163,19 @@ public static class JobRequirementRuleEngine
             Requirement = $"{language} proficiency (preferred)",
             Evidence = $"Candidate profile lists {language} proficiency as '{proficiency}'."
         });
+        result.Summary = AppendText(result.Summary,
+            $"The preferred {language} requirement is supported by the candidate profile.");
         RemoveLanguageQuestions(result, language, alternateName);
     }
 
     private static string GetLanguageContext(string text, string language, string alternateName)
     {
-        var matches = Regex.Matches(
-            text,
-            $@"\b(?:{Regex.Escape(language)}|{Regex.Escape(alternateName)})\b",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        // Split clauses so a preference for German cannot accidentally classify English as preferred.
+        var clauses = text.Split(['.', ';', '!', '?', '\\r', '\\n'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        if (matches.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        // Inspect a bounded window around every mention to interpret nearby requirement wording.
-        return string.Join(
-            " ",
-            matches.Select(match =>
-            {
-                var start = Math.Max(0, match.Index - 80);
-                var length = Math.Min(text.Length - start, match.Length + 160);
-                return text.Substring(start, length);
-            }));
+        return string.Join(" ", clauses.Where(clause =>
+            ContainsWord(clause, language) || ContainsWord(clause, alternateName)));
     }
 
     private static int? GetRequiredLevel(string context)
@@ -246,6 +252,42 @@ public static class JobRequirementRuleEngine
             Status = status,
             Explanation = explanation
         });
+    }
+
+    private static void RemoveLanguageNarrative(
+        JobAnalysisResult result,
+        string language,
+        string alternateName)
+    {
+        result.Summary = RemoveSentencesMentioning(result.Summary, language, alternateName);
+        result.Rationale = RemoveSentencesMentioning(result.Rationale, language, alternateName);
+    }
+
+    private static string RemoveSentencesMentioning(string text, string language, string alternateName)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        return string.Join(" ", sentences.Where(sentence =>
+            !ContainsWord(sentence, language) && !ContainsWord(sentence, alternateName))).Trim();
+    }
+
+    private static string AppendText(string existing, string addition)
+    {
+        if (string.IsNullOrWhiteSpace(existing))
+        {
+            return addition;
+        }
+
+        if (existing.Contains(addition, StringComparison.OrdinalIgnoreCase))
+        {
+            return existing;
+        }
+
+        return $"{existing.TrimEnd()} {addition}";
     }
 
     private static void AddQuestionIfMissing(JobAnalysisResult result, string language, string question)
