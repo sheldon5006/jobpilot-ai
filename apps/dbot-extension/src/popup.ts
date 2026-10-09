@@ -361,7 +361,7 @@ async function updateAutoFetchSetting(enabled: boolean): Promise<void> {
     setPageStatus(
       settings.autoAnalyzeEnabled
         ? "Auto-fetch and auto-analyse are enabled. Detected job descriptions will be sent to the configured AI provider."
-        : "Auto-fetch is enabled. DBot will fill job details when you open a page; analysis waits until you click Analyze.",
+        : "Auto-fetch is enabled. DBot scans job pages and refreshes details when the selected LinkedIn job changes; analysis waits until you click Analyze.",
       "success"
     );
     await fetchCurrentPage();
