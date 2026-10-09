@@ -112,8 +112,20 @@ function Test-RequirementGroundedInVacancy {
 function Test-ProfilePlaceholder {
     param([AllowNull()][string]$Text)
 
-    return [string]::IsNullOrWhiteSpace($Text) -or
-        $Text -match '(?i)replace|placeholder|not specified|not provided|unknown|^tbd$|^n/a$'
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $true }
+    return $Text.Trim() -match '(?i)^(?:replace\b|placeholder\b|unknown\b|not\s+specified\b|not\s+provided\b|tbd\b|n\s*/\s*a\b)'
+}
+
+function Get-CleanProfileFactText {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return "" }
+    $retained = @(
+        $Text -split ';' |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { -not (Test-ProfilePlaceholder $_) }
+    )
+    return ($retained -join "; ")
 }
 
 function Add-ProfileFactToCatalog {
@@ -125,8 +137,8 @@ function Add-ProfileFactToCatalog {
         [AllowNull()][string]$Text
     )
 
-    $value = ([string]$Text).Trim()
-    if (Test-ProfilePlaceholder $value) { return }
+    $value = Get-CleanProfileFactText -Text $Text
+    if ([string]::IsNullOrWhiteSpace($value)) { return }
 
     if (-not $Counters.ContainsKey($Prefix)) { $Counters[$Prefix] = 0 }
     $Counters[$Prefix] = [int]$Counters[$Prefix] + 1
@@ -151,9 +163,10 @@ function New-ProfileFactCatalog {
         $isInternship = [string]$experience.role -match '(?i)intern'
         $prefix = if ($isInternship) { "INT" } else { "EXP" }
         $category = if ($isInternship) { "internship_experience" } else { "professional_experience" }
-        if (-not (Test-ProfilePlaceholder ([string]$experience.period))) {
+        $cleanPeriod = Get-CleanProfileFactText -Text ([string]$experience.period)
+        if (-not [string]::IsNullOrWhiteSpace($cleanPeriod)) {
             $roleLabel = if ([string]::IsNullOrWhiteSpace([string]$experience.role)) { "Experience" } else { ([string]$experience.role).Trim() }
-            Add-ProfileFactToCatalog $catalog $counters "DATE" $category ("{0}: {1}" -f $roleLabel, ([string]$experience.period).Trim())
+            Add-ProfileFactToCatalog $catalog $counters "DATE" $category ("{0}: {1}" -f $roleLabel, $cleanPeriod)
         }
         foreach ($item in @($experience.evidence)) {
             Add-ProfileFactToCatalog $catalog $counters $prefix $category ([string]$item)
@@ -168,7 +181,7 @@ function New-ProfileFactCatalog {
     foreach ($language in @($Profile.languages)) {
         if (-not [string]::IsNullOrWhiteSpace([string]$language.language) -and
             -not (Test-ProfilePlaceholder ([string]$language.proficiency))) {
-            Add-ProfileFactToCatalog $catalog $counters "LAN" "language" ("{0}: {1}" -f ([string]$language.language).Trim(), ([string]$language.proficiency).Trim())
+            Add-ProfileFactToCatalog $catalog $counters "LAN" "language" ("{0}: {1}" -f ([string]$language.language).Trim(), ([string](Get-CleanProfileFactText -Text ([string]$language.proficiency))) )
         }
     }
     Add-ProfileFactToCatalog $catalog $counters "AUTH" "work_authorization" ([string]$Profile.workAuthorization)
@@ -190,6 +203,9 @@ function Get-AllowedEvidenceCategories {
     }
     if ($Requirement -match '(?i)\b(?:language|German|Deutsch|English|Englisch|CEFR|proficiency|C2|C1|B2|B1|A2|A1)\b') {
         return @("language")
+    }
+    if ($Requirement -match '(?i)\b(?:degree|qualification|graduate|graduation|university|education|academic|study|bachelor|master|MSc|BSc|PhD|diploma)\b') {
+        return @("education")
     }
     if ($Requirement -match '(?i)\b(?:professional|commercial|work)\s+experience\b|\b(?:minimum|at\s+least)\s+\d+\s+(?:years?|months?)\b') {
         return @("professional_summary", "professional_experience")
