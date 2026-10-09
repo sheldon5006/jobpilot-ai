@@ -56,9 +56,18 @@ public static class ProfileEvidenceCatalog
             var isInternship = (experience.Role ?? string.Empty).Contains("intern", StringComparison.OrdinalIgnoreCase);
             var category = isInternship ? "internship_experience" : "professional_experience";
             var prefix = isInternship ? "INT" : "EXP";
-            var source = string.IsNullOrWhiteSpace(experience.Role)
+            var roleLabel = string.IsNullOrWhiteSpace(experience.Role)
                 ? "Experience"
-                : $"Experience — {experience.Role.Trim()}";
+                : experience.Role.Trim();
+            var source = $"Experience — {roleLabel}";
+
+            Add(
+                "DATE",
+                category,
+                $"Experience dates — {roleLabel}",
+                string.IsNullOrWhiteSpace(experience.Period)
+                    ? string.Empty
+                    : $"{roleLabel}: {experience.Period.Trim()}");
 
             foreach (var item in experience.Evidence ?? [])
             {
