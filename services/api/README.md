@@ -28,7 +28,7 @@ The API reads it from the API content directory by default. Override the path wi
 Copy-Item .\appsettings.Local.example.json .\appsettings.Local.json
 ```
 
-2. Open `appsettings.Local.json` in your editor and replace `PASTE_YOUR_NEW_GEMINI_API_KEY_HERE` with your new key. Set the model to `gemini-3.8-flash` (or another model currently available to your API project).
+2. Open `appsettings.Local.json` in your editor and replace `PASTE_YOUR_NEW_GEMINI_API_KEY_HERE` with your new key. Set the model to `gemini-3.1-flash-lite` for the faster, cost-efficient default used by DBot, or choose another model currently available to your API project.
 
 ```powershell
 notepad .\appsettings.Local.json
