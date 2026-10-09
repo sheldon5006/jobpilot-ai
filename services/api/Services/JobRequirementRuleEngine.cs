@@ -33,6 +33,16 @@ public static class JobRequirementRuleEngine
         var vacancyText = $"{request.JobTitle}\n{request.JobDescription}";
         ApplyLanguage(vacancyText, profile, result, "English", "Englisch");
         ApplyLanguage(vacancyText, profile, result, "German", "Deutsch");
+
+        if (string.IsNullOrWhiteSpace(result.Summary))
+        {
+            result.Summary = "The fit summary is based on profile-supported matches and requirements explicitly stated in the vacancy.";
+        }
+
+        if (string.IsNullOrWhiteSpace(result.Rationale))
+        {
+            result.Rationale = "The rationale is based on the candidate profile and the vacancy requirements; unstated language requirements were not scored.";
+        }
     }
 
     private static void ApplyLanguage(
