@@ -34,7 +34,79 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex WorkAuthorizationTopic = new(
-        @"\b(?:work\s+authori[sz]ation|right\s+to\s+work|work\s+permit|visa|sponsorship|residence\s+permit|eligible\s+to\s+work|legally\s+entitled\s+to\s+work)\b",
+        @"\b(?:work\s+authori[sz]ation|authori[sz]ed\s+to\s+work|right\s+to\s+work|work\s+permit|visa|sponsorship|residence\s+permit|eligible\s+to\s+work|legally\s+entitled\s+to\s+work)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ExplicitWorkAuthorizationCue = new(
+        @"\b(?:must\s+(?:already\s+)?(?:be\s+)?(?:legally\s+)?(?:authori[sz]ed|eligible)|(?:current|valid)\s+right\s+to\s+work|legal\s+right\s+to\s+work|legally\s+entitled\s+to\s+work|work\s+authori[sz]ation\s+(?:is\s+)?required|must\s+have\s+(?:a\s+)?(?:valid\s+)?work\s+permit|valid\s+work\s+permit\s+required)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex NoSponsorshipCue = new(
+        @"\b(?:no|without|cannot|can't|do\s+not|don't|will\s+not|won't|unable\s+to|not\s+able\s+to)\s+(?:(?:provide|offer)\s+)?(?:(?:visa|employer|work)\s+)?sponsorship\b|\bsponsorship\s+(?:is\s+)?not\s+(?:available|provided|offered)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SponsorshipOfferedCue = new(
+        @"\b(?:visa\s+sponsorship\s+(?:is\s+)?(?:available|provided|offered)|sponsorship\s+(?:is\s+)?available|we\s+(?:can|will|do)\s+sponsor|offer\s+(?:visa\s+)?sponsorship)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex CandidateNeedsSponsorship = new(
+        @"\b(?:require|requires|requiring|need|needs)\s+(?:(?:an?|employer|visa|work)\s+)?sponsorship\b|\bsponsorship\s+required\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ExplicitlyUnauthorised = new(
+        @"\b(?:not\s+(?:currently\s+)?authori[sz]ed|not\s+eligible\s+to\s+work|no\s+legal\s+right\s+to\s+work|does\s+not\s+have\s+(?:the\s+)?right\s+to\s+work)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex CertificationTopic = new(
+        @"\b(?:certifications?|certificates?|certified|licen[cs]es?|forklift|driver'?s?\s+licen[cs]e|driving\s+licen[cs]e|security\s+clearance|clearance)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex CredentialRequirementCue = new(
+        @"\b(?:required|mandatory|essential|must|must-have|must\s+hold|must\s+possess|condition\s+of\s+employment|is\s+a\s+requirement)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ExplicitlyNotRequiredCue = new(
+        @"\b(?:not\s+required|not\s+mandatory|no\s+(?:certificate|certification|licen[cs]e)\s+required)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex NamedCredential = new(
+        @"\b(?:AWS\s+Certified\s+Developer(?:\s*[-–]\s*Associate)?|AWS\s+Solutions?\s+Architect(?:\s*[-–]\s*Associate)?|Microsoft\s+Certified(?:\s+[A-Za-z0-9.+#-]+){0,4}|CompTIA(?:\s+[A-Za-z0-9.+#-]+){0,3}|PRINCE2|PMP|CISSP|CISM|CCNA|CCNP|CKA|CKAD|forklift(?:\s+operator)?\s+licen[cs]e|driver'?s?\s+licen[cs]e|driving\s+licen[cs]e|security\s+clearance)\b(?:\s+(?:certification|certificate))?",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex StudentRoleCue = new(
+        @"\b(?:werkstudent(?:in)?|working\s+student)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex StudentEnrollmentCue = new(
+        @"\b(?:currently\s+enrolled|must\s+be\s+enrolled|enrolled\s+(?:at|in)\s+(?:a\s+)?(?:university|college|higher\s+education\s+institution)|active\s+student\s+status|only\s+(?:current\s+)?students|current\s+university\s+student)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex StudentEnrollmentProfileCue = new(
+        @"\b(?:in\s+progress|ongoing|currently\s+studying|currently\s+enrolled|enrolled|expected\s+graduation|expected\s+completion)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ExplicitlyNotEnrolledCue = new(
+        @"\b(?:not\s+currently\s+enrolled|not\s+enrolled|not\s+currently\s+studying|no\s+longer\s+enrolled)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ExperienceAmount = new(
+        @"(?<amount>\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s*\+?\s*(?<unit>years?|yrs?|months?)\s+(?:of\s+)?(?:(?:relevant|professional|commercial|practical|work|software)\s+)*(?:experience)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ExperienceDurationQuestion = new(
+        @"\b(?:years?|yrs?|months?)\b.{0,60}\bexperience\b|\bexperience\b.{0,60}\b(?:years?|yrs?|months?)\b|\bactual\s+start\s+and\s+end\s+dates?\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SummaryExperienceAmount = new(
+        @"(?<amount>\d+(?:\.\d+)?)\s*\+?\s*(?<unit>years?|yrs?|months?)\s+(?:of\s+)?(?:(?:professional|relevant|commercial|software|work)\s+)*(?:experience)\b|\bexperience\b.{0,30}\b(?<reverseAmount>\d+(?:\.\d+)?)\s*(?<reverseUnit>years?|yrs?|months?)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex PeriodMonthYear = new(
+        @"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+20\d{2}\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ExperienceThresholdCue = new(
+        @"\b(?:minimum(?:\s+of)?|at\s+least|no\s+less\s+than|required|mandatory|must\s+have|essential)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public static void Apply(
@@ -49,6 +121,10 @@ public static class JobRequirementRuleEngine
         var vacancyText = $"{request.JobTitle}\n{request.JobDescription}";
         ApplyLanguage(vacancyText, profile, result, "English", "Englisch");
         ApplyLanguage(vacancyText, profile, result, "German", "Deutsch");
+        ApplyWorkAuthorizationRequirement(vacancyText, profile, result);
+        ApplyMinimumExperienceRequirement(vacancyText, profile, result);
+        ApplyCredentialRequirements(vacancyText, profile, result);
+        ApplyStudentEnrollmentRequirement(request, vacancyText, profile, result);
         ApplyVacancyRelevanceRules(vacancyText, result);
 
         if (string.IsNullOrWhiteSpace(result.Summary))
@@ -131,6 +207,545 @@ public static class JobRequirementRuleEngine
             return !(asksToVerifyMetadata || (mentionsDatesOrDuration && indicatesUnknown));
         })).Trim();
     }
+
+    private static void ApplyWorkAuthorizationRequirement(
+        string vacancyText,
+        CandidateProfile profile,
+        JobAnalysisResult result)
+    {
+        var clauses = SplitClauses(vacancyText);
+        var hasExplicitNoSponsorship = clauses.Any(clause =>
+            WorkAuthorizationTopic.IsMatch(clause) && NoSponsorshipCue.IsMatch(clause));
+        var hasExplicitRightToWorkGate = clauses.Any(clause =>
+            WorkAuthorizationTopic.IsMatch(clause) && ExplicitWorkAuthorizationCue.IsMatch(clause));
+        var sponsorshipOfferOnly = clauses.Any(clause => SponsorshipOfferedCue.IsMatch(clause)) &&
+            !hasExplicitNoSponsorship && !hasExplicitRightToWorkGate;
+
+        RemoveWorkAuthorizationEntries(result);
+
+        // Mentioning visa support alone is not a disqualifier. Enforce this rule only when the
+        // vacancy explicitly requires existing work eligibility or says sponsorship is unavailable.
+        if ((!hasExplicitRightToWorkGate && !hasExplicitNoSponsorship) || sponsorshipOfferOnly)
+        {
+            return;
+        }
+
+        var profileStatus = profile.WorkAuthorization?.Trim() ?? string.Empty;
+        if (IsPlaceholder(profileStatus))
+        {
+            AddGap(
+                result,
+                "Right to work in the role's country / sponsorship eligibility",
+                "Must-have",
+                "Unverified",
+                "The vacancy explicitly makes work eligibility or sponsorship status a condition, but the candidate profile does not establish the current status.");
+            AddQuestionIfMissing(
+                result,
+                "work authorization",
+                "Are you legally authorised to work in the role's country under the stated sponsorship conditions? Update WorkAuthorization in the candidate profile with an accurate, country-specific answer.");
+            result.Summary = AppendText(result.Summary,
+                "Work eligibility is a mandatory screening condition, but the candidate profile does not establish the current status.");
+            result.Rationale = AppendText(result.Rationale,
+                "Work eligibility remains unverified and requires confirmation; it has not been assumed from nationality, location, or the vacancy.");
+            return;
+        }
+
+        var requiresSponsorship = CandidateNeedsSponsorship.IsMatch(profileStatus);
+        if ((hasExplicitNoSponsorship && requiresSponsorship) ||
+            ExplicitlyUnauthorised.IsMatch(profileStatus))
+        {
+            AddGap(
+                result,
+                "Right to work in the role's country / sponsorship eligibility",
+                "Must-have",
+                "Unmet",
+                "The profile explicitly indicates that the stated work-authorisation or no-sponsorship condition is not met.");
+            result.Summary = AppendText(result.Summary,
+                "The candidate profile explicitly conflicts with the vacancy's mandatory work-eligibility condition.");
+            result.Rationale = AppendText(result.Rationale,
+                "The right-to-work/sponsorship condition is explicitly unmet; the recommendation should not be Apply.");
+            return;
+        }
+
+        var limitedStudentPermit = Regex.IsMatch(
+            profileStatus,
+            @"\b(?:student\s+(?:visa|residence\s+permit)|limited\s+working\s+hours|work\s+limits?)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var statesPositiveEligibility = Regex.IsMatch(
+            profileStatus,
+            @"\b(?:authori[sz]ed|eligible|legal\s+right|right\s+to\s+work|valid\s+work\s+permit)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+            !ExplicitlyUnauthorised.IsMatch(profileStatus) &&
+            !(limitedStudentPermit && !Regex.IsMatch(
+                profileStatus,
+                @"\b(?:eligible\s+for\s+this\s+role|meets?\s+the\s+role'?s?\s+working[-\s]+hour\s+requirements)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+
+        if (statesPositiveEligibility && !requiresSponsorship)
+        {
+            result.MatchedRequirements.Add(new MatchedRequirement
+            {
+                Requirement = "Right to work in the role's country / sponsorship eligibility",
+                Evidence = $"Candidate profile explicitly states: '{profileStatus}'."
+            });
+            result.Summary = AppendText(result.Summary,
+                "The candidate profile states work eligibility consistent with the vacancy's stated sponsorship condition.");
+            result.Rationale = AppendText(result.Rationale,
+                "Work eligibility was matched from the candidate's explicit profile statement, not inferred from nationality or residence.");
+            return;
+        }
+
+        AddGap(
+            result,
+            "Right to work in the role's country / sponsorship eligibility",
+            "Must-have",
+            "Unverified",
+            "The profile contains a work-status statement, but it does not establish eligibility for this specific country and sponsorship condition.");
+        AddQuestionIfMissing(
+            result,
+            "work authorization",
+            "Please confirm whether you meet the role's country-specific right-to-work and sponsorship conditions; update WorkAuthorization with the exact verified status.");
+        result.Summary = AppendText(result.Summary,
+            "The mandatory work-eligibility condition remains unverified from the current profile wording.");
+        result.Rationale = AppendText(result.Rationale,
+            "The work-eligibility condition requires confirmation because the profile wording does not establish the specific requirement.");
+    }
+
+    private static void RemoveWorkAuthorizationEntries(JobAnalysisResult result)
+    {
+        result.MatchedRequirements.RemoveAll(item =>
+            item is not null && WorkAuthorizationTopic.IsMatch(item.Requirement ?? string.Empty));
+        result.Gaps.RemoveAll(item =>
+            item is not null && WorkAuthorizationTopic.IsMatch(item.Requirement ?? string.Empty));
+        result.QuestionsToVerify.RemoveAll(question =>
+            WorkAuthorizationTopic.IsMatch(question ?? string.Empty));
+        result.Summary = RemoveSentencesMentioningWorkAuthorization(result.Summary);
+        result.Rationale = RemoveSentencesMentioningWorkAuthorization(result.Rationale);
+    }
+
+    private static void ApplyMinimumExperienceRequirement(
+        string vacancyText,
+        CandidateProfile profile,
+        JobAnalysisResult result)
+    {
+        var requirements = SplitClauses(vacancyText)
+            .SelectMany(clause => ExperienceAmount.Matches(clause).Select(match => new
+            {
+                Clause = clause,
+                Match = match,
+                Months = ParseAmount(match.Groups["amount"].Value) *
+                         (match.Groups["unit"].Value.StartsWith("month", StringComparison.OrdinalIgnoreCase)
+                            ? 1
+                            : 12),
+                Preferred = PreferredCue.IsMatch(clause) &&
+                            !Regex.IsMatch(
+                                clause,
+                                @"\b(?:not\s+required|not\s+mandatory)\b",
+                                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+                Mandatory = ExperienceThresholdCue.IsMatch(clause) ||
+                            LanguageRequirementCue.IsMatch(clause)
+            }))
+            .Where(item => item.Months > 0 && (item.Preferred || item.Mandatory))
+            .GroupBy(item => $"{item.Months}:{item.Preferred}")
+            .Select(group => group.First())
+            .OrderByDescending(item => item.Months)
+            .ToList();
+
+        if (requirements.Count == 0)
+        {
+            return;
+        }
+
+        // Replace model-created duration gaps/questions with checks tied to the explicit threshold.
+        result.Gaps.RemoveAll(gap =>
+            gap is not null && ExperienceDurationQuestion.IsMatch(gap.Requirement ?? string.Empty));
+        result.QuestionsToVerify.RemoveAll(question => ExperienceDurationQuestion.IsMatch(question));
+        result.MatchedRequirements.RemoveAll(item =>
+            item is not null && ExperienceDurationQuestion.IsMatch(item.Requirement ?? string.Empty));
+
+        var candidateMonths = GetCandidateExperienceMonths(profile);
+        foreach (var requirement in requirements)
+        {
+            var label = requirement.Match.Value.Trim();
+            var isMet = candidateMonths.HasValue && candidateMonths.Value >= requirement.Months;
+            var severity = requirement.Preferred ? "Preferred" : "Must-have";
+
+            if (isMet)
+            {
+                result.MatchedRequirements.Add(new MatchedRequirement
+                {
+                    Requirement = label,
+                    Evidence = BuildExperienceEvidence(profile, candidateMonths!.Value)
+                });
+                continue;
+            }
+
+            var status = candidateMonths.HasValue ? "Unmet" : "Unverified";
+            AddGap(
+                result,
+                label,
+                severity,
+                status,
+                candidateMonths.HasValue
+                    ? $"The profile indicates about {candidateMonths.Value / 12.0:0.0} years of professional experience, below the vacancy's stated threshold."
+                    : "The vacancy states a minimum experience duration, but the profile does not establish a reliable total of relevant professional experience.");
+
+            if (severity == "Must-have" && status == "Unverified")
+            {
+                AddQuestionIfMissing(
+                    result,
+                    "experience duration",
+                    $"How much relevant professional experience do you have in total? The vacancy specifies '{label}'. Add accurate total experience or complete employment dates to the profile.");
+            }
+        }
+
+        // Actual employment dates become relevant only for an explicit duration requirement.
+        result.QuestionsToVerify.RemoveAll(question =>
+            EmploymentMetadataQuestion.IsMatch(question) &&
+            !question.Contains("relevant professional experience", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int ParseAmount(string value)
+    {
+        if (double.TryParse(value, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var numeric))
+        {
+            return (int)Math.Round(numeric, MidpointRounding.AwayFromZero);
+        }
+
+        return value.ToLowerInvariant() switch
+        {
+            "one" => 1,
+            "two" => 2,
+            "three" => 3,
+            "four" => 4,
+            "five" => 5,
+            "six" => 6,
+            "seven" => 7,
+            "eight" => 8,
+            "nine" => 9,
+            "ten" => 10,
+            _ => 0
+        };
+    }
+
+    private static int? GetCandidateExperienceMonths(CandidateProfile profile)
+    {
+        var summaryMatch = SummaryExperienceAmount.Match(profile.ProfessionalSummary ?? string.Empty);
+        int? summaryMonths = null;
+        if (summaryMatch.Success)
+        {
+            var amountText = summaryMatch.Groups["amount"].Success
+                ? summaryMatch.Groups["amount"].Value
+                : summaryMatch.Groups["reverseAmount"].Value;
+            var unitText = summaryMatch.Groups["unit"].Success
+                ? summaryMatch.Groups["unit"].Value
+                : summaryMatch.Groups["reverseUnit"].Value;
+
+            if (double.TryParse(amountText, System.Globalization.NumberStyles.Number,
+                    System.Globalization.CultureInfo.InvariantCulture, out var amount))
+            {
+                summaryMonths = (int)Math.Round(
+                    amount * (unitText.StartsWith("month", StringComparison.OrdinalIgnoreCase) ? 1 : 12),
+                    MidpointRounding.AwayFromZero);
+            }
+        }
+
+        var periodMonths = GetExperienceMonthsFromPeriods(profile.Experience);
+        if (summaryMonths.HasValue && periodMonths.HasValue)
+        {
+            return Math.Max(summaryMonths.Value, periodMonths.Value);
+        }
+
+        return summaryMonths ?? periodMonths;
+    }
+
+    private static int? GetExperienceMonthsFromPeriods(IReadOnlyCollection<ExperienceEntry> experiences)
+    {
+        if (experiences.Count == 0 ||
+            experiences.Any(experience => string.IsNullOrWhiteSpace(experience.Period) ||
+                experience.Period.Contains("replace", StringComparison.OrdinalIgnoreCase) ||
+                experience.Period.Contains("unknown", StringComparison.OrdinalIgnoreCase) ||
+                experience.Period.Contains("not specified", StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        var intervals = new List<(int Start, int End)>();
+        foreach (var experience in experiences)
+        {
+            var matches = PeriodMonthYear.Matches(experience.Period);
+            DateTime start;
+            DateTime end;
+
+            if (matches.Count >= 2)
+            {
+                if (!TryParseMonthYear(matches[0].Value, out start) ||
+                    !TryParseMonthYear(matches[^1].Value, out end))
+                {
+                    return null;
+                }
+            }
+            else if (matches.Count == 1 &&
+                     Regex.IsMatch(
+                         experience.Period,
+                         @"\b(?:present|current|now)\b",
+                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                if (!TryParseMonthYear(matches[0].Value, out start))
+                {
+                    return null;
+                }
+
+                var now = DateTime.Now;
+                end = new DateTime(now.Year, now.Month, 1);
+            }
+            else
+            {
+                return null;
+            }
+
+            if (end < start)
+            {
+                return null;
+            }
+
+            intervals.Add((start.Year * 12 + start.Month, end.Year * 12 + end.Month));
+        }
+
+        intervals.Sort((left, right) => left.Start.CompareTo(right.Start));
+        var totalMonths = 0;
+        var currentStart = intervals[0].Start;
+        var currentEnd = intervals[0].End;
+
+        foreach (var interval in intervals.Skip(1))
+        {
+            if (interval.Start <= currentEnd)
+            {
+                currentEnd = Math.Max(currentEnd, interval.End);
+                continue;
+            }
+
+            totalMonths += currentEnd - currentStart;
+            currentStart = interval.Start;
+            currentEnd = interval.End;
+        }
+
+        totalMonths += currentEnd - currentStart;
+        return totalMonths > 0 ? totalMonths : null;
+    }
+
+    private static bool TryParseMonthYear(string value, out DateTime date) =>
+        DateTime.TryParseExact(
+            value.Trim(),
+            new[] { "MMM yyyy", "MMMM yyyy" },
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out date);
+
+    private static string BuildExperienceEvidence(CandidateProfile profile, int months)
+    {
+        var summary = profile.ProfessionalSummary?.Trim() ?? string.Empty;
+        if (SummaryExperienceAmount.IsMatch(summary))
+        {
+            return $"Candidate professional summary states: '{summary}'.";
+        }
+
+        return $"The dated entries in the candidate profile establish approximately {months / 12.0:0.0} years of professional experience.";
+    }
+
+    private static void ApplyCredentialRequirements(
+        string vacancyText,
+        CandidateProfile profile,
+        JobAnalysisResult result)
+    {
+        foreach (var clause in SplitClauses(vacancyText))
+        {
+            var topic = CertificationTopic.Match(clause);
+            if (!topic.Success)
+            {
+                continue;
+            }
+
+            // Language-level certificates are handled by the deterministic language rule.
+            if (Regex.IsMatch(
+                    clause,
+                    @"\b(?:German|Deutsch|English|Englisch|language|CEFR|language\s+certificate)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+                !Regex.IsMatch(
+                    clause,
+                    @"\b(?:forklift|driver'?s?\s+licen[cs]e|driving\s+licen[cs]e|security\s+clearance)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                continue;
+            }
+
+            var isPreferred = PreferredCue.IsMatch(clause) &&
+                !Regex.IsMatch(
+                    clause,
+                    @"\b(?:not\s+required|not\s+mandatory)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var isMandatory = !isPreferred && CredentialRequirementCue.IsMatch(clause);
+            if (!isPreferred && !isMandatory)
+            {
+                continue;
+            }
+
+            if (!isPreferred && ExplicitlyNotRequiredCue.IsMatch(clause) &&
+                !Regex.IsMatch(
+                    clause,
+                    @"\b(?:preferred|advantage|a\s+plus|nice\s+to\s+have)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                continue;
+            }
+
+            var credentialLabelMatch = NamedCredential.Match(clause);
+            var credentialLabel = credentialLabelMatch.Success
+                ? credentialLabelMatch.Value.Trim()
+                : clause.Trim().Trim(':', '-', '–', ',');
+
+            result.MatchedRequirements.RemoveAll(item =>
+                item is not null && CertificationTopic.IsMatch(item.Requirement ?? string.Empty) &&
+                CredentialTokens(credentialLabel).All(token =>
+                    CredentialTokens(item.Requirement).Contains(token, StringComparer.OrdinalIgnoreCase)));
+            result.Gaps.RemoveAll(gap =>
+                gap is not null && CertificationTopic.IsMatch(gap.Requirement ?? string.Empty) &&
+                CredentialTokens(credentialLabel).All(token =>
+                    CredentialTokens(gap.Requirement).Contains(token, StringComparer.OrdinalIgnoreCase)));
+            result.QuestionsToVerify.RemoveAll(question =>
+                CertificationTopic.IsMatch(question) &&
+                CredentialTokens(credentialLabel).All(token =>
+                    CredentialTokens(question).Contains(token, StringComparer.OrdinalIgnoreCase)));
+
+            var evidence = profile.Certifications?.FirstOrDefault(certification =>
+                !IsPlaceholder(certification ?? string.Empty) &&
+                CredentialTokens(credentialLabel).Count > 0 &&
+                CredentialTokens(credentialLabel).All(token =>
+                    CredentialTokens(certification).Contains(token, StringComparer.OrdinalIgnoreCase)));
+
+            if (!string.IsNullOrWhiteSpace(evidence))
+            {
+                result.MatchedRequirements.Add(new MatchedRequirement
+                {
+                    Requirement = credentialLabel,
+                    Evidence = $"Candidate profile lists the credential: '{evidence.Trim()}'."
+                });
+                continue;
+            }
+
+            var severity = isMandatory ? "Must-have" : "Preferred";
+            AddGap(
+                result,
+                credentialLabel,
+                severity,
+                "Unverified",
+                $"The vacancy states this credential is {severity.ToLowerInvariant()}, but the candidate profile does not confirm whether it is held and valid.");
+
+            if (isMandatory)
+            {
+                AddQuestionIfMissing(
+                    result,
+                    credentialLabel,
+                    $"Do you hold a currently valid '{credentialLabel}'? Add the exact credential name and validity details to Certifications if held.");
+            }
+        }
+    }
+
+    private static List<string> CredentialTokens(string? value)
+    {
+        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "a", "an", "the", "is", "are", "and", "or", "of", "to", "for", "with", "must",
+            "hold", "held", "have", "has", "required", "mandatory", "essential", "preferred",
+            "valid", "currently", "candidate", "applicant", "applicants", "role", "position",
+            "condition", "employment", "certificate", "certification", "certified", "license",
+            "licence", "licenses", "licences", "clearance", "this", "that", "relevant", "all"
+        };
+
+        return Regex.Matches(value ?? string.Empty, @"[a-z0-9+#.]+", RegexOptions.IgnoreCase)
+            .Select(match => match.Value.Trim('.'))
+            .Where(token => token.Length > 0 && !ignored.Contains(token))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void ApplyStudentEnrollmentRequirement(
+        JobAnalysisRequest request,
+        string vacancyText,
+        CandidateProfile profile,
+        JobAnalysisResult result)
+    {
+        var clauses = SplitClauses(vacancyText);
+        var titleMatch = StudentRoleCue.Match(request.JobTitle ?? string.Empty);
+        var enrollmentClause = clauses.FirstOrDefault(clause => StudentEnrollmentCue.IsMatch(clause));
+        if (!titleMatch.Success && enrollmentClause is null)
+        {
+            return;
+        }
+
+        var enrollmentMatch = enrollmentClause is null
+            ? titleMatch
+            : StudentEnrollmentCue.Match(enrollmentClause);
+        var label = enrollmentMatch.Success
+            ? enrollmentMatch.Value.Trim()
+            : titleMatch.Value.Trim();
+
+        result.MatchedRequirements.RemoveAll(item =>
+            item is not null && StudentEnrollmentCue.IsMatch(item.Requirement ?? string.Empty) ||
+            item is not null && StudentRoleCue.IsMatch(item.Requirement ?? string.Empty));
+        result.Gaps.RemoveAll(gap =>
+            gap is not null && (StudentEnrollmentCue.IsMatch(gap.Requirement ?? string.Empty) ||
+                                StudentRoleCue.IsMatch(gap.Requirement ?? string.Empty)));
+        result.QuestionsToVerify.RemoveAll(question =>
+            StudentEnrollmentCue.IsMatch(question) || StudentRoleCue.IsMatch(question));
+
+        var educationEvidence = profile.Education?.FirstOrDefault(education =>
+            !IsPlaceholder(education ?? string.Empty) &&
+            StudentEnrollmentProfileCue.IsMatch(education) &&
+            !ExplicitlyNotEnrolledCue.IsMatch(education));
+
+        var explicitlyNotEnrolled = (profile.Education ?? [])
+            .Concat(profile.Constraints ?? [])
+            .Any(entry => ExplicitlyNotEnrolledCue.IsMatch(entry ?? string.Empty));
+
+        if (!string.IsNullOrWhiteSpace(educationEvidence))
+        {
+            result.MatchedRequirements.Add(new MatchedRequirement
+            {
+                Requirement = label,
+                Evidence = $"Candidate profile lists current study/enrolment: '{educationEvidence.Trim()}'."
+            });
+            result.Summary = AppendText(result.Summary,
+                "Current university study/enrolment is supported by the candidate profile.");
+            result.Rationale = AppendText(result.Rationale,
+                "The student-status condition was checked against the candidate's education entry.");
+            return;
+        }
+
+        AddGap(
+            result,
+            label,
+            "Must-have",
+            explicitlyNotEnrolled ? "Unmet" : "Unverified",
+            explicitlyNotEnrolled
+                ? "The candidate profile explicitly states that the candidate is not currently enrolled."
+                : "The role requires current student status, but the candidate profile does not establish current enrolment.");
+
+        if (!explicitlyNotEnrolled)
+        {
+            AddQuestionIfMissing(
+                result,
+                "student enrollment",
+                "Are you currently enrolled at a university for the period required by this role? Add the accurate current-study status to Education.");
+        }
+    }
+
+    private static string[] SplitClauses(string text) =>
+        Regex.Split(text ?? string.Empty, @"(?<=[.!?;])\s+|\r?\n")
+            .Select(clause => clause.Trim())
+            .Where(clause => !string.IsNullOrWhiteSpace(clause))
+            .ToArray();
 
     private static void ApplyLanguage(
         string vacancyText,
