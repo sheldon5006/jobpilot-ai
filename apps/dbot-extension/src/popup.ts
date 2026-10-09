@@ -13,6 +13,7 @@ interface ApiProblem {
 
 interface ExtractedJobDetails {
   found: boolean;
+  jobId?: string;
   title: string;
   company: string;
   description: string;
@@ -134,8 +135,12 @@ function renderKeyRequirements(result: JobAnalysisResult): void {
 
 function setPageToolsCollapsed(collapsed: boolean): void {
   pageToolsContent.hidden = collapsed;
-  togglePageToolsButton.textContent = collapsed ? "Show" : "Hide";
+  togglePageToolsButton.textContent = collapsed ? "Tools +" : "Tools −";
   togglePageToolsButton.setAttribute("aria-expanded", String(!collapsed));
+  togglePageToolsButton.setAttribute(
+    "aria-label",
+    collapsed ? "Show page detection settings" : "Hide page detection settings"
+  );
 }
 
 function renderAnalysis(result: JobAnalysisResult): void {
@@ -268,7 +273,7 @@ async function fetchCurrentPage(): Promise<void> {
     setPageStatus(error instanceof Error ? error.message : "Could not fetch details from this page.", "error");
   } finally {
     fetchPageButton.disabled = false;
-    fetchPageButton.textContent = "↧ Fetch from current page";
+    fetchPageButton.textContent = "↧ Fetch job details from page";
   }
 }
 
@@ -341,7 +346,8 @@ async function updateAutoFetchSetting(enabled: boolean): Promise<void> {
   const response = (await chrome.runtime.sendMessage({
     type: "DBOT_SET_SETTINGS",
     autoFetchEnabled: enabled,
-    autoAnalyzeEnabled: requestedAnalyze
+    autoAnalyzeEnabled: requestedAnalyze,
+    ...(enabled ? { tabId: await getActiveTabIdInCurrentWindow() } : {})
   })) as SettingsResponse;
   if (!response?.ok || !response.settings) {
     throw new Error(response?.error || "Could not save the automatic fetching setting.");
@@ -363,7 +369,7 @@ async function updateAutoFetchSetting(enabled: boolean): Promise<void> {
     settings.autoAnalyzeEnabled = false;
     autoAnalyzeToggle.checked = false;
     autoAnalyzeToggle.disabled = true;
-    setPageStatus("Automatic fetching is off. Use Fetch from current page when you need it.", "info");
+    setPageStatus("Automatic fetching is off. Use Fetch job details from page when you need it.", "info");
   }
 }
 
@@ -436,8 +442,8 @@ chrome.runtime.onMessage.addListener((message: { type: string; tabId?: number; m
 });
 
 void chrome.storage.local.get("dbotPageToolsHidden")
-  .then(values => setPageToolsCollapsed(values["dbotPageToolsHidden"] === true))
-  .catch(() => setPageToolsCollapsed(false));
+  .then(values => setPageToolsCollapsed(values["dbotPageToolsHidden"] !== false))
+  .catch(() => setPageToolsCollapsed(true));
 
 togglePageToolsButton.addEventListener("click", () => {
   const collapsed = !pageToolsContent.hidden;
