@@ -1064,7 +1064,7 @@ public static class JobRequirementRuleEngine
         string severity,
         string status,
         string explanation) =>
-        AddLanguageGap(result, language, requiredLevel: null, severity, status, explanation);
+        AddLanguageGap(result, language, null, severity, status, explanation);
 
     private static void RemoveLanguageNarrative(
         JobAnalysisResult result,
