@@ -102,7 +102,7 @@ public static class JobRequirementRuleEngine
             return string.Empty;
         }
 
-        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
         return string.Join(" ", sentences.Where(sentence =>
             !WorkAuthorizationTopic.IsMatch(sentence))).Trim();
     }
