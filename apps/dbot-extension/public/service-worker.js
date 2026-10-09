@@ -192,7 +192,7 @@ function processedJobKey(tabId, job) {
 // Injected in Chrome's isolated extension world. It watches only LinkedIn's
 // selected job section, identified by JobDetails_AboutTheJob_<jobId>.
 function installLinkedInJobObserver() {
-  if (!/(^|\\.)linkedin\\.com$/i.test(location.hostname)) {
+  if (!/(^|\.)linkedin\.com$/i.test(location.hostname)) {
     return { installed: false, reason: "not-linkedin" };
   }
 
@@ -202,12 +202,12 @@ function installLinkedInJobObserver() {
   const readSignature = () => {
     const section = document.querySelector('[id^="JobDetails_AboutTheJob_"]');
     if (!section) return "";
-    const jobId = String(section.id || "").match(/^JobDetails_AboutTheJob_(\\d+)$/)?.[1] || "";
+    const jobId = String(section.id || "").match(/^JobDetails_AboutTheJob_(\d+)$/)?.[1] || "";
     const descriptionNode = section.querySelector('[data-testid="expandable-text-box"]') || section;
     const description = String(descriptionNode.innerText || descriptionNode.textContent || "")
-      .replace(/\\u00a0/g, " ")
-      .replace(/[ \\t]+/g, " ")
-      .replace(/\\s{3,}/g, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\s{3,}/g, " ")
       .trim();
     const titleLink = jobId
       ? Array.from(document.querySelectorAll('a[href*="/jobs/view/"]')).find(link => {
@@ -219,7 +219,7 @@ function installLinkedInJobObserver() {
         })
       : null;
     const title = String(titleLink?.textContent || descriptionNode.querySelector("strong")?.textContent || "")
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
     if (!jobId && !title && description.length < 40) return "";
     return JSON.stringify({
