@@ -88,7 +88,66 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             },
             generationConfig = new
             {
-                responseMimeType = "application/json",
+                responseFormat = new
+                {
+                    text = new
+                    {
+                        mimeType = "application/json",
+                        schema = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                recommendation = new { type = "string", @enum = new[] { "Apply", "Review", "Skip" } },
+                                matchScore = new { type = "integer", minimum = 0, maximum = 100 },
+                                detectedLanguage = new { type = "string" },
+                                englishSummary = new { type = "string" },
+                                summary = new { type = "string" },
+                                matchedRequirements = new
+                                {
+                                    type = "array",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            requirement = new { type = "string" },
+                                            evidence = new { type = "string" },
+                                            evidenceIds = new { type = "array", items = new { type = "string" } }
+                                        },
+                                        required = new[] { "requirement", "evidence", "evidenceIds" },
+                                        additionalProperties = false
+                                    }
+                                },
+                                gaps = new
+                                {
+                                    type = "array",
+                                    items = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            requirement = new { type = "string" },
+                                            severity = new { type = "string", @enum = new[] { "Must-have", "Preferred", "Unknown" } },
+                                            status = new { type = "string", @enum = new[] { "Unverified", "Unmet" } },
+                                            explanation = new { type = "string" }
+                                        },
+                                        required = new[] { "requirement", "severity", "status", "explanation" },
+                                        additionalProperties = false
+                                    }
+                                },
+                                questionsToVerify = new { type = "array", items = new { type = "string" } },
+                                rationale = new { type = "string" }
+                            },
+                            required = new[]
+                            {
+                                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "summary",
+                                "matchedRequirements", "gaps", "questionsToVerify", "rationale"
+                            },
+                            additionalProperties = false
+                        }
+                    }
+                },
                 maxOutputTokens = 1800,
                 thinkingConfig = new
                 {
