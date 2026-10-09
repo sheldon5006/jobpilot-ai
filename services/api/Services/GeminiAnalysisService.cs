@@ -45,14 +45,14 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             description = request.JobDescription.Trim()
         };
 
-        var userPrompt = $"""
+        var userPrompt = $$"""
             Assess the vacancy against the candidate profile.
 
             PROFILE JSON:
-            {JsonSerializer.Serialize(profile, JsonOptions)}
+            {{JsonSerializer.Serialize(profile, JsonOptions)}}
 
             VACANCY JSON:
-            {JsonSerializer.Serialize(jobDetails, JsonOptions)}
+            {{JsonSerializer.Serialize(jobDetails, JsonOptions)}}
 
             Return one concise JSON object with exactly:
             - recommendation: Apply, Review, or Skip
@@ -60,8 +60,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             - detectedLanguage: original vacancy language
             - englishSummary: vacancy/role/requirements only, never candidate fit
             - summary: concise overall fit
-            - matchedRequirements: [{{requirement, evidence}}] using profile evidence only
-            - gaps: [{{requirement, severity, status, explanation}}], where severity is Must-have, Preferred, or Unknown; status is Unverified or Unmet
+            - matchedRequirements: [{requirement, evidence}] using profile evidence only
+            - gaps: [{requirement, severity, status, explanation}], where severity is Must-have, Preferred, or Unknown; status is Unverified or Unmet
             - questionsToVerify: material requirement/eligibility questions only
             - rationale: recommendation supported by profile facts
 
