@@ -128,6 +128,7 @@ public sealed class EvidenceAndEligibilityTests
         var languageFact = Assert.Single(ProfileEvidenceCatalog.Create(profile)
             .Where(fact => fact.Category == "language"));
 
+        Assert.Equal("LAN-001", languageFact.Id);
         Assert.Equal("German: Learning", languageFact.Text);
     }
 
