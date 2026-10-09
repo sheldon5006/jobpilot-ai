@@ -30,7 +30,7 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex EmploymentMetadataQuestion = new(
-        @"\b(?:(?:please\s+)?(?:provide|confirm|share|enter|specify)\s+(?:the\s+)?(?:actual\s+)?(?:start\s+and\s+end\s+dates?|employment\s+dates?|professional\s+roles?\s+(?:start\s+and\s+end\s+)?dates?)|(?:actual\s+)?start\s+and\s+end\s+dates?|employment\s+(?:(?:start|end)\s+)?dates?|exact\s+(?:employment\s+)?dates?|dates?\s+for\s+(?:the\s+)?[\w.-]+\s+roles?|experience\s+duration|duration\s+of\s+(?:your\s+)?(?:professional|work|employment)\s+experience)\b|\b(?:to\s+verify|verify|confirm)\s+(?:your\s+)?(?:experience\s+duration|employment\s+dates?)\b",
+        @"\b(?:(?:please\s+)?(?:provide|confirm|share|enter|specify)\s+(?:the\s+)?(?:(?:actual|verified|accurate|complete)\s+)?(?:start\s*(?:and|/)\s*end\s+dates?|employment\s+dates?|professional\s+roles?\s+(?:start\s*(?:and|/)\s*end\s+)?dates?)|(?:(?:actual|verified|accurate|complete)\s+)?start\s*(?:and|/)\s*end\s+dates?|employment\s+(?:(?:start|end)\s+)?dates?|exact\s+(?:employment\s+)?dates?|dates?\s+for\s+(?:the\s+)?[\w.-]+\s+roles?|experience\s+duration|duration\s+of\s+(?:your\s+)?(?:professional|work|employment)\s+experience)\b|\b(?:to\s+verify|verify|confirm)\s+(?:your\s+)?(?:experience\s+duration|employment\s+dates?)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex WorkAuthorizationTopic = new(
@@ -297,7 +297,7 @@ public static class JobRequirementRuleEngine
             AddQuestionIfMissing(
                 result,
                 "work authorization",
-                "Are you legally authorised to work in the role's country under the stated sponsorship conditions? Update WorkAuthorization in the candidate profile with an accurate, country-specific answer.");
+                "Do you already have the right to work in the country where this job is based, under the employer's sponsorship policy?");
             result.Summary = AppendText(result.Summary,
                 "Work eligibility is a mandatory screening condition, but the candidate profile does not establish the current status.");
             result.Rationale = AppendText(result.Rationale,
@@ -359,7 +359,7 @@ public static class JobRequirementRuleEngine
         AddQuestionIfMissing(
             result,
             "work authorization",
-            "Please confirm whether you meet the role's country-specific right-to-work and sponsorship conditions; update WorkAuthorization with the exact verified status.");
+            "Does your current status let you work in the country where this job is based under the employer's sponsorship policy?");
         result.Summary = AppendText(result.Summary,
             "The mandatory work-eligibility condition remains unverified from the current profile wording.");
         result.Rationale = AppendText(result.Rationale,
@@ -449,7 +449,7 @@ public static class JobRequirementRuleEngine
                 AddQuestionIfMissing(
                     result,
                     "experience duration",
-                    $"How much relevant professional experience do you have in total? The vacancy specifies '{label}'. Add accurate total experience or complete employment dates to the profile.");
+                    $"How many years of relevant professional experience do you have? The job asks for '{label}'.");
             }
         }
 
@@ -735,7 +735,7 @@ public static class JobRequirementRuleEngine
                 AddQuestionIfMissing(
                     result,
                     credentialLabel,
-                    $"Do you hold a currently valid '{credentialLabel}'? Add the exact credential name and validity details to Certifications if held.");
+                    $"Do you currently hold the '{credentialLabel}' certification or licence?");
             }
         }
     }
@@ -822,7 +822,7 @@ public static class JobRequirementRuleEngine
             AddQuestionIfMissing(
                 result,
                 "student enrollment",
-                "Are you currently enrolled at a university for the period required by this role? Add the accurate current-study status to Education.");
+                "Are you currently enrolled at a university during the period of this job?");
         }
     }
 
@@ -915,7 +915,7 @@ public static class JobRequirementRuleEngine
                 AddQuestionIfMissing(
                     result,
                     language,
-                    $"What is your current {language} proficiency level? Update the candidate profile with an accurate level.");
+                    $"What is your current {language} proficiency level (for example, B1, B2, C1, or C2)?");
                 result.Summary = AppendText(result.Summary,
                     $"{language} is a mandatory requirement, but the candidate profile does not establish a verified proficiency level.");
                 result.Rationale = AppendText(result.Rationale,
