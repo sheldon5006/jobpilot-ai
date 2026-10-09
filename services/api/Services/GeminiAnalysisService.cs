@@ -70,7 +70,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             - questionsToVerify: material requirement/eligibility questions only
             - rationale: recommendation supported by profile facts
 
-            Use Unmet only for an explicit profile conflict (for example, B1 stated against mandatory C2); missing or placeholder information is Unverified. The vacancy is never proof the candidate meets a requirement. Do not present academic/project skills as professional experience. Be concise and avoid repeating the vacancy.
+            Use Unmet only for an explicit profile conflict (for example, B1 stated against mandatory C2); missing or placeholder information is Unverified. The vacancy is never proof the candidate meets a requirement. Do not present academic/project skills as professional experience.
+            Keep output compact to prevent truncation: return at most 5 matchedRequirements, at most 2 evidenceIds per match, at most 5 gaps, and at most 3 questionsToVerify. Each evidence, explanation, summary, and rationale should be one short sentence. Cite only the minimum profile-fact IDs needed to support each match; never emit long lists of related IDs.
             """;
 
         var payload = new
@@ -150,7 +151,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
                         }
                     }
                 },
-                maxOutputTokens = 1800,
+                maxOutputTokens = 4096,
                 thinkingConfig = new
                 {
                     // Job matching is a classification task; lower reasoning effort reduces latency.
@@ -187,8 +188,24 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             cancellationToken: cancellationToken);
 
         if (!responseJson.RootElement.TryGetProperty("candidates", out var candidates) ||
-            candidates.GetArrayLength() == 0 ||
-            !candidates[0].TryGetProperty("content", out var content) ||
+            candidates.ValueKind != JsonValueKind.Array ||
+            candidates.GetArrayLength() == 0)
+        {
+            throw new GeminiApiException(
+                "Gemini returned no analysable candidate response. Try again; if this continues, check the provider response and configured model.",
+                (int)HttpStatusCode.BadGateway);
+        }
+
+        var candidate = candidates[0];
+        if (candidate.TryGetProperty("finishReason", out var finishReasonElement) &&
+            string.Equals(finishReasonElement.GetString(), "MAX_TOKENS", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new GeminiApiException(
+                "Gemini reached its output-token limit before completing the job assessment. Try again; the response budget has been increased, and the output is limited to the most relevant evidence.",
+                (int)HttpStatusCode.BadGateway);
+        }
+
+        if (!candidate.TryGetProperty("content", out var content) ||
             !content.TryGetProperty("parts", out var parts) ||
             parts.GetArrayLength() == 0 ||
             !parts[0].TryGetProperty("text", out var textElement))
@@ -214,7 +231,12 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             // Keep the upstream payload private, but expose the JSON path/type mismatch
             // so local development can identify which field needs a more flexible schema.
             var path = string.IsNullOrWhiteSpace(ex.Path) ? "the response root" : ex.Path;
-            var detail = $"Gemini returned JSON that does not match the expected schema at {path}. {ex.Message}";
+            var incompleteJson = ex.Message.Contains("end of data", StringComparison.OrdinalIgnoreCase)
+                || ex.Message.Contains("end of input", StringComparison.OrdinalIgnoreCase)
+                || ex.Message.Contains("incomplete", StringComparison.OrdinalIgnoreCase);
+            var detail = incompleteJson
+                ? $"Gemini returned incomplete JSON at {path}; the response may have been truncated. Try again. If it repeats, use a shorter job description."
+                : $"Gemini returned JSON that does not match the expected schema at {path}. {ex.Message}";
             throw new GeminiApiException(detail, (int)HttpStatusCode.BadGateway);
         }
 
