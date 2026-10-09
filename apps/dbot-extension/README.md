@@ -36,7 +36,7 @@ After changing extension code, run `npm run build` again and reload DBot on the 
 1. Start the API using the instructions in `services/api/README.md`.
 2. Paste a job title, company, and job description into DBot.
 3. Click **Analyze job fit**.
-4. Review the recommendation, fit score, matched requirements, gaps, and questions.
+4. Review the recommendation, heuristic fit score, separate mandatory-requirements status, matched requirements with profile-fact IDs, evidence warnings, gaps, and questions.
 
 The extension sends the job description to the local API only when you click Analyze. The API also sends the configured candidate profile and job description to Gemini. Free-tier content may be used by Google to improve its products; avoid unnecessary personal identifiers.
 
