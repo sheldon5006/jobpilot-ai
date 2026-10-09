@@ -3,7 +3,7 @@ param(
     [ValidateRange(0, 100)]
     [int]$ScoreTolerance = 10,
     [ValidateRange(0, 3)]
-    [int]$TransientRetries = 1
+    [int]$TransientRetries = 2
 )
 
 $ErrorActionPreference = "Stop"
