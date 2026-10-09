@@ -16,9 +16,10 @@
           <span><strong>JobPilot</strong><small>PERSONAL JOB SEARCH</small></span>
         </a>
         <nav class="nav-list" aria-label="Main navigation">
-          <a class="nav-item active" href="#overview"><span class="nav-glyph">⌂</span> Overview</a>
-          <a class="nav-item" href="#saved-jobs"><span class="nav-glyph">▤</span> Saved jobs</a>
-          <a class="nav-item" href="#new-analysis"><span class="nav-glyph">✦</span> Analyse a job</a>
+          <a class="nav-item active" href="#overview" data-page="dashboard"><span class="nav-glyph">⌂</span> Overview</a>
+          <a class="nav-item" href="#saved-jobs" data-page="dashboard"><span class="nav-glyph">▤</span> Saved jobs</a>
+          <a class="nav-item" href="#new-analysis" data-page="dashboard"><span class="nav-glyph">✦</span> Analyse a job</a>
+          <a class="nav-item" href="#my-profile-page" data-page="profile"><span class="nav-glyph">◉</span> My Profile</a>
         </nav>
         <div class="sidebar-bottom">
           <div class="connection-dot"></div>
@@ -36,6 +37,7 @@
           <button id="refresh-button" class="button button-secondary" type="button">↻ Refresh</button>
         </header>
 
+        <div id="dashboard-page" class="page-view">
         <section id="overview" class="stats-grid" aria-label="Job search statistics">
           <article class="stat-card"><span class="stat-label">Jobs analysed</span><strong id="stat-total">—</strong><small>Saved in your history</small></article>
           <article class="stat-card"><span class="stat-label">Strong matches</span><strong id="stat-strong">—</strong><small>Score of 80 or higher</small></article>
@@ -115,6 +117,27 @@
             <section class="detail-section"><h3>Gaps to consider</h3><ul id="detail-gaps" class="detail-list"></ul></section>
             <section class="detail-section"><h3>Questions to verify</h3><ul id="detail-questions" class="detail-list"></ul></section>
           </div>
+          <section class="cv-section">
+            <div class="panel-heading">
+              <div><p class="eyebrow">APPLICATION DOCUMENT</p><h3>CV used for this job</h3></div>
+              <span class="cv-badge">PDF / DOCX</span>
+            </div>
+            <p class="muted cv-copy">Attach the exact CV version you submitted or plan to submit for this role. This stores the file against this job record; JobPilot does not generate a CV yet.</p>
+            <form id="cv-upload-form" class="cv-upload-form">
+              <div class="field">
+                <label for="cv-file">Choose a CV file</label>
+                <input id="cv-file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                <small class="field-hint">PDF or DOCX · Maximum 10 MB · Uploading replaces the previous file for this job.</small>
+              </div>
+              <div class="cv-actions">
+                <button id="upload-cv-button" class="button button-primary" type="submit">Attach CV</button>
+                <button id="download-cv-button" class="button button-secondary" type="button" hidden>Download saved CV</button>
+                <button id="delete-cv-button" class="button button-danger" type="button" hidden>Remove CV</button>
+              </div>
+              <p id="cv-current-info" class="cv-current-info">No CV attached to this job.</p>
+              <div id="cv-message" class="form-message" role="status" hidden></div>
+            </form>
+          </section>
           <section class="application-editor">
             <div><p class="eyebrow">APPLICATION TRACKER</p><h3>Keep this application up to date</h3></div>
             <form id="application-form" class="application-form">
@@ -125,6 +148,89 @@
             </form>
           </section>
           <details class="description-disclosure"><summary>View original job description</summary><pre id="detail-description"></pre></details>
+        </section>
+        </div>
+
+        <section id="my-profile-page" class="page-view profile-page" hidden>
+          <header class="profile-page-header">
+            <div>
+              <p class="eyebrow">YOUR CAREER STORY</p>
+              <h1>My Profile</h1>
+              <p class="subheading">Keep one trustworthy source of career history for every job match.</p>
+            </div>
+            <button id="edit-profile-button" class="button button-primary" type="button">Edit profile</button>
+          </header>
+
+          <div id="profile-message" class="form-message" role="status" hidden></div>
+          <div id="profile-loading" class="loading-state">Loading your profile…</div>
+
+          <div id="profile-story-view" hidden>
+            <section class="profile-stats-grid">
+              <article class="profile-stat"><span class="stat-label">Career entries</span><strong id="profile-stat-roles">0</strong></article>
+              <article class="profile-stat"><span class="stat-label">Professional skills</span><strong id="profile-stat-skills">0</strong></article>
+              <article class="profile-stat"><span class="stat-label">Education entries</span><strong id="profile-stat-education">0</strong></article>
+              <article class="profile-stat"><span class="stat-label">Languages</span><strong id="profile-stat-languages">0</strong></article>
+            </section>
+
+            <section class="panel profile-story-panel">
+              <div class="panel-heading"><div><p class="eyebrow">INTRODUCTION</p><h2>My professional story</h2></div></div>
+              <p id="profile-summary-view" class="profile-summary-view"></p>
+              <div class="story-subsection"><h3>Roles I’m working towards</h3><div id="profile-roles-view" class="chip-list"></div></div>
+            </section>
+
+            <section class="panel profile-story-panel">
+              <div class="panel-heading"><div><p class="eyebrow">CAREER TIMELINE</p><h2>Experience & achievements</h2></div></div>
+              <div id="career-timeline-view" class="career-timeline"></div>
+            </section>
+
+            <div class="profile-two-column">
+              <section class="panel profile-story-panel"><p class="eyebrow">CORE TOOLKIT</p><h2>Professional skills</h2><div id="profile-skills-view" class="chip-list"></div></section>
+              <section class="panel profile-story-panel"><p class="eyebrow">PROJECTS & LEARNING</p><h2>Project and academic skills</h2><div id="profile-project-skills-view" class="chip-list"></div></section>
+              <section class="panel profile-story-panel"><p class="eyebrow">EDUCATION</p><h2>Learning journey</h2><ul id="profile-education-view" class="story-list"></ul></section>
+              <section class="panel profile-story-panel"><p class="eyebrow">LANGUAGES & CERTIFICATIONS</p><h2>Additional qualifications</h2><ul id="profile-language-view" class="story-list"></ul><div class="story-subsection"><h3>Certifications</h3><ul id="profile-certifications-view" class="story-list"></ul></div></section>
+              <section class="panel profile-story-panel"><p class="eyebrow">WORK PREFERENCES</p><h2>Work authorisation</h2><p id="profile-work-auth-view" class="muted profile-detail-text"></p></section>
+              <section class="panel profile-story-panel"><p class="eyebrow">PERSONAL REMINDERS</p><h2>Constraints & notes for matching</h2><ul id="profile-constraints-view" class="story-list"></ul></section>
+            </div>
+            <p id="profile-updated-at" class="profile-updated-at"></p>
+          </div>
+
+          <form id="profile-edit-form" class="profile-edit-form" hidden>
+            <section class="panel profile-edit-panel">
+              <p class="eyebrow">01 · INTRODUCTION</p><h2>Professional summary</h2>
+              <p class="muted">Tell your story in a few accurate sentences. This is one of the main facts DBot uses to evaluate your fit.</p>
+              <textarea id="profile-summary-input" rows="5" maxlength="6000" placeholder="Your professional journey, strengths and current direction…"></textarea>
+              <div class="field"><label for="profile-target-roles-input">Roles you are targeting <span>One role per line</span></label><textarea id="profile-target-roles-input" rows="3" placeholder=".NET Developer&#10;Full-Stack Developer&#10;AI Application Developer"></textarea></div>
+            </section>
+
+            <section class="panel profile-edit-panel">
+              <div class="panel-heading"><div><p class="eyebrow">02 · CAREER TIMELINE</p><h2>Experience and achievements</h2></div><button id="add-experience-button" class="button button-secondary" type="button">+ Add role</button></div>
+              <p class="muted">Keep each role separate. Add dates if you know them, then write achievements or responsibilities as one item per line.</p>
+              <div id="experience-editor" class="experience-editor"></div>
+            </section>
+
+            <section class="panel profile-edit-panel">
+              <p class="eyebrow">03 · SKILLS & LEARNING</p><h2>What you bring</h2>
+              <div class="profile-edit-grid">
+                <div class="field"><label for="profile-skills-input">Professional skills <span>One per line</span></label><textarea id="profile-skills-input" rows="7" placeholder="C#&#10;ASP.NET Core&#10;SQL Server"></textarea></div>
+                <div class="field"><label for="profile-project-skills-input">Project and academic skills <span>One per line</span></label><textarea id="profile-project-skills-input" rows="7" placeholder="Python&#10;Machine Learning&#10;RAG"></textarea></div>
+                <div class="field"><label for="profile-education-input">Education <span>One entry per line</span></label><textarea id="profile-education-input" rows="5" placeholder="MSc Artificial Intelligence — in progress"></textarea></div>
+                <div class="field"><label for="profile-certifications-input">Certifications and licences <span>One per line</span></label><textarea id="profile-certifications-input" rows="5" placeholder="Only include credentials you actually hold"></textarea></div>
+              </div>
+            </section>
+
+            <section class="panel profile-edit-panel">
+              <p class="eyebrow">04 · LANGUAGES & PREFERENCES</p><h2>Additional details</h2>
+              <div class="field"><label for="profile-languages-input">Languages <span>Use “Language — proficiency”, one per line</span></label><textarea id="profile-languages-input" rows="4" placeholder="English — Professional&#10;German — Learning&#10;Kannada — Native"></textarea></div>
+              <div class="field"><label for="profile-work-auth-input">Work authorisation <span>Be precise; leave blank if you are unsure</span></label><textarea id="profile-work-auth-input" rows="3" maxlength="500" placeholder="Your verified right-to-work and sponsorship situation"></textarea></div>
+              <div class="field"><label for="profile-constraints-input">Constraints and matching notes <span>One per line</span></label><textarea id="profile-constraints-input" rows="4" placeholder="Availability, preferred locations, conditions you want DBot to consider"></textarea></div>
+            </section>
+
+            <div id="profile-edit-message" class="form-message" role="status" hidden></div>
+            <div class="profile-form-actions">
+              <button id="cancel-profile-edit-button" class="button button-secondary" type="button">Cancel</button>
+              <button id="save-profile-button" class="button button-primary" type="submit">Save career story</button>
+            </div>
+          </form>
         </section>
 
         <footer class="page-footer"><span>JOBPILOT AI</span><span>Personal job search workspace · AI scores are estimates, not hiring guarantees</span></footer>
