@@ -13,12 +13,20 @@ public sealed class SavedJob
     public string ApplicationStatus { get; set; } = "Saved";
     public string Notes { get; set; } = string.Empty;
     public string AnalysisJson { get; set; } = "{}";
-    public string? CvFileName { get; set; }
-    public string? CvContentType { get; set; }
-    public byte[]? CvBytes { get; set; }
-    public DateTime? CvUploadedAtUtc { get; set; }
+    public JobCvAttachment? CvAttachment { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class JobCvAttachment
+{
+    public Guid JobId { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/pdf";
+    public byte[] Bytes { get; set; } = [];
+    public long SizeBytes { get; set; }
+    public DateTime UploadedAtUtc { get; set; } = DateTime.UtcNow;
+    public SavedJob Job { get; set; } = null!;
 }
 
 public sealed record SavedJobListItem(
