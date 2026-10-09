@@ -34,11 +34,11 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex WorkAuthorizationTopic = new(
-        @"\b(?:work\s+authori[sz]ation|authori[sz]ed\s+to\s+work|right\s+to\s+work|work\s+permit|visa|sponsorship|residence\s+permit|eligible\s+to\s+work|legally\s+entitled\s+to\s+work)\b",
+        @"\b(?:work[\s-]+authori[sz]ation|authori[sz]ed[\s-]+to[\s-]+work|right[\s-]+to[\s-]+work|work[\s-]+permit|visa|sponsorship|residence[\s-]+permit|eligible[\s-]+to[\s-]+work|legally[\s-]+entitled[\s-]+to[\s-]+work)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ExplicitWorkAuthorizationCue = new(
-        @"\b(?:must\s+(?:already\s+)?(?:be\s+)?(?:legally\s+)?(?:authori[sz]ed|eligible)|(?:current|valid)\s+right\s+to\s+work|legal\s+right\s+to\s+work|legally\s+entitled\s+to\s+work|work\s+authori[sz]ation\s+(?:is\s+)?required|must\s+have\s+(?:a\s+)?(?:valid\s+)?work\s+permit|valid\s+work\s+permit\s+required)\b",
+        @"\b(?:must\s+(?:already\s+)?(?:be\s+)?(?:legally\s+)?(?:authori[sz]ed|eligible)|(?:current|valid)\s+right[\s-]+to[\s-]+work|legal[\s-]+right[\s-]+to[\s-]+work|legally[\s-]+entitled[\s-]+to[\s-]+work|work[\s-]+authori[sz]ation\s+(?:is\s+)?required|must\s+have\s+(?:a\s+)?(?:valid\s+)?work[\s-]+permit|valid\s+work[\s-]+permit\s+required)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex NoSponsorshipCue = new(
