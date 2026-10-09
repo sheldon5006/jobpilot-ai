@@ -165,8 +165,15 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             throw new GeminiApiException("Gemini returned an empty analysis.", (int)HttpStatusCode.BadGateway);
         }
 
-        result.MatchScore = Math.Clamp(result.MatchScore, 0, 100);
-        result.Recommendation = result.Recommendation.Trim().ToLowerInvariant() switch
+        // Treat model output as untrusted and normalise missing/null fields before using them.
+        result.MatchedRequirements ??= [];
+        result.Gaps ??= [];
+        result.QuestionsToVerify ??= [];
+        result.DetectedLanguage ??= "Unknown";
+        result.EnglishSummary ??= string.Empty;
+        result.Summary ??= string.Empty;
+        result.Rationale ??= string.Empty;
+        result.Recommendation = (result.Recommendation ?? "Review").Trim().ToLowerInvariant() switch
         {
             "apply" => "Apply",
             "skip" => "Skip",
@@ -176,6 +183,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         // If AI recommends applying but also reports unresolved questions or a must-have gap,
         // downgrade to Review. This is advice only; final decisions remain with the user.
         var hasMustHaveGap = result.Gaps.Any(g =>
+            g is not null &&
             string.Equals(g.Severity, "Must-have", StringComparison.OrdinalIgnoreCase));
         if (result.Recommendation == "Apply" &&
             (result.QuestionsToVerify.Count > 0 || hasMustHaveGap))
