@@ -132,6 +132,7 @@ function extractJobDetailsFromPage() {
 
   return {
     found,
+    jobId: selectedJobId,
     title,
     company,
     description,
@@ -177,19 +178,129 @@ async function notifyPanel(message) {
   }
 }
 
+function processedJobKey(tabId, job) {
+  return JSON.stringify([
+    tabId,
+    job.url || "",
+    job.jobId || job.title || "",
+    (job.description || "").length,
+    (job.description || "").slice(0, 220),
+    (job.description || "").slice(-120)
+  ]);
+}
+
+// Injected in Chrome's isolated extension world. It watches only LinkedIn's
+// selected job section, identified by JobDetails_AboutTheJob_<jobId>.
+function installLinkedInJobObserver() {
+  if (!/(^|\\.)linkedin\\.com$/i.test(location.hostname)) {
+    return { installed: false, reason: "not-linkedin" };
+  }
+
+  const observerKey = "__dbotLinkedInJobObserverV1";
+  if (window[observerKey]) return { installed: true, alreadyInstalled: true };
+
+  const readSignature = () => {
+    const section = document.querySelector('[id^="JobDetails_AboutTheJob_"]');
+    if (!section) return "";
+    const jobId = String(section.id || "").match(/^JobDetails_AboutTheJob_(\\d+)$/)?.[1] || "";
+    const descriptionNode = section.querySelector('[data-testid="expandable-text-box"]') || section;
+    const description = String(descriptionNode.innerText || descriptionNode.textContent || "")
+      .replace(/\\u00a0/g, " ")
+      .replace(/[ \\t]+/g, " ")
+      .replace(/\\s{3,}/g, " ")
+      .trim();
+    const titleLink = jobId
+      ? Array.from(document.querySelectorAll('a[href*="/jobs/view/"]')).find(link => {
+          try {
+            return new URL(link.href, location.href).pathname.includes("/jobs/view/" + jobId);
+          } catch {
+            return false;
+          }
+        })
+      : null;
+    const title = String(titleLink?.textContent || descriptionNode.querySelector("strong")?.textContent || "")
+      .replace(/\\s+/g, " ")
+      .trim();
+    if (!jobId && !title && description.length < 40) return "";
+    return JSON.stringify({
+      jobId,
+      title,
+      descriptionLength: description.length,
+      descriptionStart: description.slice(0, 180),
+      descriptionEnd: description.slice(-100)
+    });
+  };
+
+  let lastSignature = readSignature();
+  let debounceHandle;
+  const scheduleCheck = () => {
+    clearTimeout(debounceHandle);
+    debounceHandle = setTimeout(() => {
+      const signature = readSignature();
+      if (!signature || signature === lastSignature) return;
+      lastSignature = signature;
+      try {
+        chrome.runtime.sendMessage({
+          type: "DBOT_LINKEDIN_JOB_CHANGED",
+          signature,
+          url: location.href
+        }).catch(() => undefined);
+      } catch {
+        // The service worker may be restarting; the next DOM change will retry.
+      }
+    }, 850);
+  };
+
+  const observer = new MutationObserver(scheduleCheck);
+  observer.observe(document.documentElement || document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["id", "href"]
+  });
+  window[observerKey] = { observer };
+  return { installed: true, alreadyInstalled: false };
+}
+
+async function ensureLinkedInJobObserver(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: installLinkedInJobObserver
+    });
+  } catch {
+    // Some pages prohibit script injection; ordinary tab-change fetching still works.
+  }
+}
+
+const pendingAutoFetchTabs = new Set();
+
 async function maybeAutoFetch(tabId, tabUrl) {
   const settings = await readSettings();
-  if (!settings.autoFetchEnabled || inProgressTabs.has(tabId)) return;
+  if (!settings.autoFetchEnabled) return;
   if (!(await hasAllSitesPermission())) return;
 
-  const url = tabUrl || (await chrome.tabs.get(tabId)).url || "";
-  if (!/^https?:\/\//i.test(url)) return;
-  const key = `${tabId}:${url}`;
-  if (recentlyProcessed.get(tabId) === key) return;
+  if (inProgressTabs.has(tabId)) {
+    pendingAutoFetchTabs.add(tabId);
+    return;
+  }
+
+  let url = tabUrl || "";
+  try {
+    if (!url) url = (await chrome.tabs.get(tabId)).url || "";
+  } catch {
+    return;
+  }
+  if (!/^https?:\\/\\//i.test(url)) return;
 
   inProgressTabs.add(tabId);
   try {
+    await ensureLinkedInJobObserver(tabId);
     const job = await extractFromTab(tabId);
+    const key = processedJobKey(tabId, job);
+    if (recentlyProcessed.get(tabId) === key) return;
+
     recentlyProcessed.set(tabId, key);
     await notifyPanel({
       type: "DBOT_JOB_DETAILS_DETECTED",
@@ -207,6 +318,9 @@ async function maybeAutoFetch(tabId, tabUrl) {
     });
   } finally {
     inProgressTabs.delete(tabId);
+    if (pendingAutoFetchTabs.delete(tabId)) {
+      void maybeAutoFetch(tabId);
+    }
   }
 }
 
@@ -228,8 +342,16 @@ chrome.permissions.onRemoved.addListener(() => {
   void notifyPanel({ type: "DBOT_SETTINGS_CHANGED" });
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message.type !== "string") return false;
+
+  if (message.type === "DBOT_LINKEDIN_JOB_CHANGED") {
+    const tabId = sender.tab?.id;
+    if (Number.isInteger(tabId)) {
+      void maybeAutoFetch(tabId, sender.tab?.url);
+    }
+    return false;
+  }
 
   if (message.type === "DBOT_GET_SETTINGS") {
     Promise.all([readSettings(), hasAllSitesPermission()])
@@ -278,7 +400,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           });
           return;
         }
-        recentlyProcessed.set(tab.id, `${tab.id}:${job.url}`);
+        recentlyProcessed.set(tab.id, processedJobKey(tab.id, job));
         sendResponse({ ok: true, tabId: tab.id, job, source: "manual" });
       } catch (error) {
         sendResponse({
@@ -303,6 +425,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         dbotAutoFetchEnabled: autoFetchEnabled,
         dbotAutoAnalyzeEnabled: autoAnalyzeEnabled
       });
+      if (autoFetchEnabled && Number.isInteger(message.tabId)) {
+        await ensureLinkedInJobObserver(message.tabId);
+      }
       sendResponse({ ok: true, settings: { autoFetchEnabled, autoAnalyzeEnabled } });
     })().catch(error => sendResponse({
       ok: false,
