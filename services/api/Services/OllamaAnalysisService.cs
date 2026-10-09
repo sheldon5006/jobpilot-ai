@@ -59,6 +59,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             JOB DETAILS JSON:
             {JsonSerializer.Serialize(jobDetails, JsonOptions)}
 
+            englishSummary must summarise the vacancy only; do not mention the candidate or candidate fit in that field.
+            summary and rationale must assess fit using candidate-profile evidence, not assumptions.
             Score from 0 to 100 as an INTEGER, not a fraction or percentage string.
             Recommendation must be exactly Apply, Review, or Skip.
             Every matched requirement must include both requirement and profile-based evidence.
