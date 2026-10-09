@@ -100,10 +100,18 @@ function extractJobDetailsFromPage() {
     ? companyFromStructured
     : companyFromStructured?.name || "";
 
+  // Prefer known job-description containers first, including LinkedIn's
+  // dynamically rendered job detail pane, then fall back to common page markup.
   const selectors = [
-    '[itemprop="description"]',
+    "#job-details",
+    ".jobs-description__content",
+    ".jobs-description-content__text",
+    ".jobs-box__html-content",
+    '[class*="jobs-description-content" i]',
     '[data-testid*="job-description" i]',
     '[data-automation-id*="jobPostingDescription" i]',
+    '[itemprop="description"]',
+    '[data-job-description]',
     '[class*="job-description" i]',
     '[id*="job-description" i]',
     '[class*="jobDescription" i]',
@@ -145,8 +153,11 @@ function extractJobDetailsFromPage() {
 
   const title = cleanText(
     structuredJob?.title ||
+    document.querySelector(".jobs-unified-top-card__job-title")?.textContent ||
+    document.querySelector("#job-details h1")?.textContent ||
+    document.querySelector("main h1")?.textContent ||
+    document.querySelector("h1")?.textContent ||
     document.querySelector('meta[property="og:title"]')?.getAttribute("content") ||
-    document.querySelector("h1")?.innerText ||
     document.title
   ).slice(0, 160);
 
@@ -293,18 +304,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
 
       const tab = await chrome.tabs.get(requestedTabId);
-      const isHttpPage = typeof tab.url === "string"
-        && (tab.url.startsWith("http://") || tab.url.startsWith("https://"));
-      if (tab.id === undefined || !isHttpPage) {
+      if (tab.id === undefined) {
         sendResponse({
           ok: false,
-          error: "Open a normal http/https job webpage before fetching details."
+          error: "DBot could not access the selected browser tab. Please retry from the job page."
         });
         return;
       }
       try {
+        // Don't reject the tab just because Chrome omitted tab.url from metadata.
+        // Read location.href from the page itself after script injection.
         const job = await extractFromTab(tab.id);
-        recentlyProcessed.set(tab.id, `${tab.id}:${tab.url}`);
+        if (typeof job.url !== "string" || !/^https?:\/\//i.test(job.url)) {
+          sendResponse({
+            ok: false,
+            error: "Open a normal http/https job webpage before fetching details."
+          });
+          return;
+        }
+        recentlyProcessed.set(tab.id, `${tab.id}:${job.url}`);
         sendResponse({ ok: true, tabId: tab.id, job, source: "manual" });
       } catch (error) {
         sendResponse({
