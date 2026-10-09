@@ -71,6 +71,7 @@ public static class JobRequirementRuleEngine
 
         var proficiency = profileEntry?.Proficiency?.Trim() ?? string.Empty;
         var isUnknown = IsPlaceholder(proficiency);
+        var learning = ContainsWord(proficiency, "Learning");
         var requiredLevel = GetRequiredLevel(nearbyText);
         var profileLevel = GetLevel(proficiency);
         var explicitLearningMismatch = isRequired &&
@@ -104,7 +105,7 @@ public static class JobRequirementRuleEngine
                 return;
             }
 
-            if (isUnknown || (requiredLevel.HasValue && !profileLevel.HasValue))
+            if (isUnknown || learning || (requiredLevel.HasValue && !profileLevel.HasValue))
             {
                 AddGap(
                     result,
@@ -139,7 +140,6 @@ public static class JobRequirementRuleEngine
 
         // A stated preferred language is scored as a preferred gap if the profile says learning,
         // is blank, or otherwise does not establish proficiency. It does not block Apply.
-        var learning = ContainsWord(proficiency, "Learning");
         if (isUnknown || learning)
         {
             AddGap(
