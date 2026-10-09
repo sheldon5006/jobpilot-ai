@@ -90,7 +90,8 @@ function Test-RequirementGroundedInVacancy {
     # Ignore only those descriptors; keep concrete skills, qualifications, levels, and quantities strict.
     $genericRequirementWords = @(
         "professional", "practical", "relevant", "commercial", "work", "working",
-        "experience", "experienced", "using", "knowledge", "demonstrated", "hands"
+        "experience", "experienced", "using", "knowledge", "demonstrated", "hands",
+        "language", "proficiency"
     )
     $requirementTokens = @(
         Get-NormalizedTokens $Requirement |
