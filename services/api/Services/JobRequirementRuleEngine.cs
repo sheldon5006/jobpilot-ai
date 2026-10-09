@@ -1007,14 +1007,8 @@ public static class JobRequirementRuleEngine
         _ => 0
     };
 
-    private static bool IsPlaceholder(string proficiency) =>
-        string.IsNullOrWhiteSpace(proficiency) ||
-        proficiency.Contains("replace", StringComparison.OrdinalIgnoreCase) ||
-        proficiency.Contains("unknown", StringComparison.OrdinalIgnoreCase) ||
-        proficiency.Contains("not specified", StringComparison.OrdinalIgnoreCase) ||
-        proficiency.Contains("not provided", StringComparison.OrdinalIgnoreCase) ||
-        proficiency.Equals("tbd", StringComparison.OrdinalIgnoreCase) ||
-        proficiency.Equals("n/a", StringComparison.OrdinalIgnoreCase);
+    private static bool IsPlaceholder(string value) =>
+        string.IsNullOrWhiteSpace(ProfileEvidenceCatalog.CleanFactText(value));
 
     private static bool ContainsWord(string text, string word) =>
         Regex.IsMatch(
