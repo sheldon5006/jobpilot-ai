@@ -224,6 +224,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
                 "DBot changed the recommendation to Review because at least one mandatory requirement remains unverified.");
         }
 
+        JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
         return result;
