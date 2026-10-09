@@ -194,11 +194,12 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             _ => "Review"
         };
 
-        // Validate model matches against the candidate's actual profile facts.
-        ProfileEvidenceValidator.Apply(profile, result);
-
-        // Reconcile model output with requirements explicitly stated in the vacancy.
+        // Reconcile model output with requirements explicitly stated in the vacancy first,
+        // so deterministic eligibility rules can replace irrelevant model-generated entries.
         JobRequirementRuleEngine.Apply(request, profile, result);
+
+        // Validate the remaining matches, including deterministic matches, against profile facts.
+        ProfileEvidenceValidator.Apply(profile, result);
 
         JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
