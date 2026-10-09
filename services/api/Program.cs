@@ -36,6 +36,14 @@ builder.Services.AddHttpClient<GeminiAnalysisService>(client =>
     client.Timeout = TimeSpan.FromSeconds(90);
 });
 
+builder.Services.AddHttpClient<OllamaAnalysisService>((services, client) =>
+{
+    var configuration = services.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["Ollama:BaseUrl"] ?? "http://127.0.0.1:11434";
+    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+
 var app = builder.Build();
 
 app.UseCors("LocalDbotExtension");
@@ -52,7 +60,8 @@ app.Run();
 
 static async Task<IResult> AnalyzeJobAsync(
     JobAnalysisRequest request,
-    GeminiAnalysisService analyzer,
+    GeminiAnalysisService geminiAnalyzer,
+    OllamaAnalysisService ollamaAnalyzer,
     IConfiguration configuration,
     IWebHostEnvironment environment,
     CancellationToken cancellationToken)
@@ -131,28 +140,49 @@ static async Task<IResult> AnalyzeJobAsync(
             statusCode: StatusCodes.Status409Conflict);
     }
 
-    if (string.IsNullOrWhiteSpace(configuration["Gemini:ApiKey"]) &&
+    var provider = configuration["AI:Provider"] ?? "Gemini";
+    var useOllama = provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase);
+    var useGemini = provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase);
+
+    if (!useOllama && !useGemini)
+    {
+        return Results.Problem(
+            title: "AI provider is not supported",
+            detail: "Set AI:Provider to either Gemini or Ollama in services/api/appsettings.Local.json.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    if (useGemini &&
+        string.IsNullOrWhiteSpace(configuration["Gemini:ApiKey"]) &&
         string.IsNullOrWhiteSpace(configuration["GEMINI_API_KEY"]))
     {
         return Results.Problem(
             title: "Gemini API key is not configured",
-            detail: "Add your key to services/api/appsettings.Local.json under Gemini:ApiKey, or set GEMINI_API_KEY in the environment. Never commit the real key to Git.",
+            detail: "Gemini is selected. Add your key under Gemini:ApiKey in services/api/appsettings.Local.json, or set GEMINI_API_KEY. For fully local analysis, set AI:Provider to Ollama instead.",
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
     try
     {
-        var result = await analyzer.AnalyzeAsync(
-            new JobAnalysisRequest
-            {
-                JobTitle = request.JobTitle?.Trim(),
-                Company = request.Company?.Trim(),
-                JobDescription = description
-            },
-            profile,
-            cancellationToken);
+        var normalizedRequest = new JobAnalysisRequest
+        {
+            JobTitle = request.JobTitle?.Trim(),
+            Company = request.Company?.Trim(),
+            JobDescription = description
+        };
+
+        var result = useOllama
+            ? await ollamaAnalyzer.AnalyzeAsync(normalizedRequest, profile, cancellationToken)
+            : await geminiAnalyzer.AnalyzeAsync(normalizedRequest, profile, cancellationToken);
 
         return Results.Ok(result);
+    }
+    catch (OllamaApiException exception)
+    {
+        return Results.Problem(
+            title: "Local AI analysis failed",
+            detail: exception.Message,
+            statusCode: StatusCodes.Status502BadGateway);
     }
     catch (GeminiApiException exception) when (exception.StatusCode == StatusCodes.Status429TooManyRequests)
     {
@@ -170,16 +200,24 @@ static async Task<IResult> AnalyzeJobAsync(
     }
     catch (HttpRequestException)
     {
+        var detail = useOllama
+            ? "Ollama could not be reached. Confirm the Ollama app is running and that its local API is available at the configured Ollama:BaseUrl."
+            : "Gemini could not be reached. Check your internet connection and try again. No paid-provider fallback is configured.";
+
         return Results.Problem(
-            title: "Gemini could not be reached",
-            detail: "Check your internet connection and try again. No paid-provider fallback is configured.",
+            title: useOllama ? "Local Ollama service could not be reached" : "Gemini could not be reached",
+            detail,
             statusCode: StatusCodes.Status502BadGateway);
     }
     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
     {
+        var detail = useOllama
+            ? "The local model did not respond in time. Try a shorter job description or check Ollama resource usage."
+            : "Gemini did not respond in time. Try again with a shorter description.";
+
         return Results.Problem(
             title: "AI analysis timed out",
-            detail: "Gemini did not respond in time. Try again with a shorter description.",
+            detail,
             statusCode: StatusCodes.Status504GatewayTimeout);
     }
 }
