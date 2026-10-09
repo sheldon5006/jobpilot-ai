@@ -42,6 +42,7 @@ textarea {
   display: grid;
   width: 42px;
   height: 42px;
+  flex: 0 0 auto;
   place-items: center;
   border-radius: 13px;
   color: #fff;
@@ -162,6 +163,20 @@ textarea:focus {
   line-height: 1.45;
 }
 
+.privacy-note {
+  padding: 10px 11px;
+  border: 1px solid #eadfb9;
+  border-radius: 9px;
+  color: #66562b;
+  background: #fffaf0;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.privacy-note strong {
+  color: #4f421f;
+}
+
 .primary-button {
   display: flex;
   align-items: center;
@@ -180,12 +195,17 @@ textarea:focus {
   transition: background 120ms ease, transform 120ms ease;
 }
 
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
   background: #2448bf;
 }
 
-.primary-button:active {
+.primary-button:active:not(:disabled) {
   transform: translateY(1px);
+}
+
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .result-panel {
@@ -200,6 +220,11 @@ textarea:focus {
   display: none;
 }
 
+.result-panel.error-state {
+  border-color: #f0cccc;
+  background: #fff5f5;
+}
+
 .result-heading {
   display: flex;
   align-items: center;
@@ -208,14 +233,20 @@ textarea:focus {
 
 .result-icon {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
   place-items: center;
   border-radius: 9px;
   color: #2854c5;
   background: #dce8ff;
   font-size: 13px;
   font-weight: 800;
+}
+
+.result-heading-copy {
+  min-width: 0;
+  flex: 1;
 }
 
 .result-heading .eyebrow {
@@ -225,34 +256,172 @@ textarea:focus {
 .result-heading h2 {
   margin: 0;
   font-size: 13px;
+  line-height: 1.35;
 }
 
-#result-copy {
-  margin: 11px 0 8px;
+.recommendation-pill {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid #d6dce7;
+  border-radius: 999px;
+  color: #58667c;
+  background: white;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.recommendation-pill.apply {
+  border-color: #b6e1c7;
+  color: #17633a;
+  background: #edfbf2;
+}
+
+.recommendation-pill.review {
+  border-color: #e8d59e;
+  color: #775714;
+  background: #fff8e5;
+}
+
+.recommendation-pill.skip {
+  border-color: #eabcbc;
+  color: #933434;
+  background: #fff0f0;
+}
+
+.score-summary {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 10px;
+  margin: 13px 0;
+}
+
+.score-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  border: 1px solid #d9e4fb;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.score-card strong {
+  color: #2349aa;
+  font-size: 17px;
+  letter-spacing: -0.04em;
+}
+
+.score-card span {
+  color: #697995;
+  font-size: 9px;
+}
+
+.english-summary {
+  padding: 9px 10px;
+  border: 1px solid #d9e4fb;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.result-panel h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.english-summary p,
+.result-copy {
+  margin: 0;
   color: #42516a;
   font-size: 11px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.result-section {
+  margin-top: 13px;
+}
+
+.result-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-list li {
+  padding: 8px 9px;
+  border: 1px solid #dce6fa;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #42516a;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.result-list li strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #26364f;
+  font-size: 10px;
+}
+
+.result-list li p {
+  margin: 0;
+}
+
+.gap-severity {
+  display: inline-block;
+  margin: 0 0 4px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #6c5a2b;
+  background: #fff3d4;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.result-list li.empty-list-item {
+  color: #78859a;
+  font-style: italic;
 }
 
 .result-meta {
-  margin: 0;
+  margin: 12px 0 0;
   color: #697995;
   font-size: 10px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.result-disclaimer {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #d9e4fb;
+  color: #68758b;
+  font-size: 9px;
+  line-height: 1.45;
 }
 
 footer {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 7px;
   margin-top: 20px;
   color: #8490a2;
   font-size: 10px;
+  line-height: 1.45;
 }
 
 .status-dot {
   width: 6px;
   height: 6px;
+  flex: 0 0 auto;
+  margin-top: 3px;
   border-radius: 50%;
   background: #9aa6b7;
 }
