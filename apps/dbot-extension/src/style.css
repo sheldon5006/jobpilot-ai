@@ -407,6 +407,36 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.candidate-expectations-card {
+  margin: 0 0 10px;
+  padding: 10px 11px;
+  border: 1px solid #d9e4fb;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.candidate-expectations-card h3 {
+  margin: 0 0 7px;
+  color: #33445f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.candidate-expectations-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 15px;
+  color: #42516a;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.candidate-expectations-list li {
+  padding-left: 1px;
+  overflow-wrap: anywhere;
+}
+
 .result-copy {
   margin: 0;
   color: #42516a;
