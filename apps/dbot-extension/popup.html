@@ -30,21 +30,26 @@
             <p class="eyebrow">CURRENT WEBPAGE</p>
             <h2 id="page-tools-title">Fetch job details</h2>
           </div>
-          <span class="page-tools-icon" aria-hidden="true">↧</span>
+          <div class="page-tools-actions">
+            <button id="toggle-page-tools-button" class="collapse-button" type="button" aria-controls="page-tools-content" aria-expanded="true">Hide</button>
+            <span class="page-tools-icon" aria-hidden="true">↧</span>
+          </div>
         </div>
-        <p class="page-tools-description">Read the job title, company and description from the current page HTML. Check the details before analysing.</p>
-        <button id="fetch-current-page-button" class="secondary-button" type="button">↧ Fetch from current page</button>
-        <p id="page-fetch-status" class="page-fetch-status" role="status">Ready to inspect the current tab when you choose Fetch.</p>
-        <div class="settings-divider"></div>
-        <label class="setting-row" for="auto-fetch-toggle">
-          <input id="auto-fetch-toggle" type="checkbox" />
-          <span><strong>Auto-fetch on page changes</strong><small>When enabled, DBot checks pages you visit for job details.</small></span>
-        </label>
-        <label class="setting-row" for="auto-analyze-toggle">
-          <input id="auto-analyze-toggle" type="checkbox" disabled />
-          <span><strong>Auto-analyse detected jobs</strong><small>Automatically send a detected job and your configured profile to the AI provider.</small></span>
-        </label>
-        <p class="permission-note">Automatic fetching asks for your permission to read pages on HTTP/HTTPS sites. You can leave it off and fetch only the current tab when you need it. DBot does not submit applications.</p>
+        <div id="page-tools-content">
+          <p class="page-tools-description">Read the job title, company and description from the current page HTML. Check the details before analysing.</p>
+          <button id="fetch-current-page-button" class="secondary-button" type="button">↧ Fetch from current page</button>
+          <p id="page-fetch-status" class="page-fetch-status" role="status">Ready to inspect the current tab when you choose Fetch.</p>
+          <div class="settings-divider"></div>
+          <label class="setting-row" for="auto-fetch-toggle">
+            <input id="auto-fetch-toggle" type="checkbox" />
+            <span><strong>Auto-fetch on page changes</strong><small>When enabled, DBot checks pages you visit for job details.</small></span>
+          </label>
+          <label class="setting-row" for="auto-analyze-toggle">
+            <input id="auto-analyze-toggle" type="checkbox" disabled />
+            <span><strong>Auto-analyse detected jobs</strong><small>Automatically send a detected job and your configured profile to the AI provider.</small></span>
+          </label>
+          <p class="permission-note">Automatic fetching asks for your permission to read pages on HTTP/HTTPS sites. You can leave it off and fetch only the current tab when you need it. DBot does not submit applications.</p>
+        </div>
       </section>
 
       <form id="job-form">
@@ -81,9 +86,8 @@
           <span id="result-icon" class="result-icon" aria-hidden="true">✦</span>
           <div class="result-heading-copy">
             <p class="eyebrow" id="result-eyebrow">AI ASSESSMENT</p>
-            <h2 id="result-title">Analysis result</h2>
+            <h2 id="result-title">Overall assessment</h2>
           </div>
-          <span id="recommendation-pill" class="recommendation-pill">Review</span>
         </div>
 
         <div class="score-summary">
@@ -91,47 +95,14 @@
             <strong id="match-score">--</strong>
             <span>Fit score</span>
           </div>
-          <div class="english-summary">
-            <h3>Role summary</h3>
-            <p id="english-summary"></p>
+          <div class="score-card language-score-card">
+            <strong id="role-languages">—</strong>
+            <span>Role language</span>
           </div>
         </div>
 
-        <h3>Overall assessment</h3>
-        <p id="result-copy" class="result-copy"></p>
-
-        <section class="result-section mandatory-status-section">
-          <h3>Mandatory requirements</h3>
-          <p id="mandatory-status" class="result-copy">Not evaluated.</p>
-        </section>
-
-        <section id="requirement-warning-section" class="result-section" hidden>
-          <h3>Vacancy requirement checks</h3>
-          <ul id="requirement-warnings-list" class="result-list"></ul>
-        </section>
-
-        <section id="evidence-warning-section" class="result-section" hidden>
-          <h3>Evidence needs review</h3>
-          <ul id="evidence-warnings-list" class="result-list"></ul>
-        </section>
-
-        <section class="result-section">
-          <h3>Matched requirements</h3>
-          <ul id="matches-list" class="result-list"></ul>
-        </section>
-
-        <section class="result-section">
-          <h3>Gaps to consider</h3>
-          <ul id="gaps-list" class="result-list"></ul>
-        </section>
-
-        <section class="result-section">
-          <h3>Questions to verify</h3>
-          <ul id="questions-list" class="result-list"></ul>
-        </section>
-
-        <p id="result-meta" class="result-meta"></p>
-        <p class="result-disclaimer">The fit score is an estimate, not an interview probability. Review the evidence before deciding. No application is submitted by DBot.</p>
+        <p id="result-copy" class="result-copy fit-verdict">Strong fit / Not a strong fit</p>
+        <p class="result-disclaimer">Fit score is an estimate, not an interview probability. DBot does not submit applications.</p>
       </section>
 
       <footer>
