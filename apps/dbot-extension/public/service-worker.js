@@ -259,8 +259,28 @@ function installLinkedInJobObserver() {
     attributes: true,
     attributeFilter: ["id", "href"]
   });
-  window[observerKey] = { observer };
+  window[observerKey] = {
+    observer,
+    dispose: () => {
+      observer.disconnect();
+      clearTimeout(debounceHandle);
+    }
+  };
   return { installed: true, alreadyInstalled: false };
+}
+
+function removeLinkedInJobObserver() {
+  const observerKey = "__dbotLinkedInJobObserverV1";
+  const state = window[observerKey];
+  if (!state) return { removed: false };
+  try {
+    state.dispose?.();
+    state.observer?.disconnect();
+  } catch {
+    // Best effort cleanup; the background setting still prevents further scans.
+  }
+  delete window[observerKey];
+  return { removed: true };
 }
 
 async function ensureLinkedInJobObserver(tabId) {
@@ -271,6 +291,17 @@ async function ensureLinkedInJobObserver(tabId) {
     });
   } catch {
     // Some pages prohibit script injection; ordinary tab-change fetching still works.
+  }
+}
+
+async function removeObserverFromTab(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: removeLinkedInJobObserver
+    });
+  } catch {
+    // The page may have closed or access may have been revoked.
   }
 }
 
@@ -427,6 +458,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       if (autoFetchEnabled && Number.isInteger(message.tabId)) {
         await ensureLinkedInJobObserver(message.tabId);
+      } else if (!autoFetchEnabled) {
+        try {
+          const linkedinTabs = await chrome.tabs.query({ url: ["https://*.linkedin.com/*"] });
+          await Promise.all(
+            linkedinTabs
+              .filter(tab => Number.isInteger(tab.id))
+              .map(tab => removeObserverFromTab(tab.id))
+          );
+        } catch {
+          // Automatic fetch is disabled in storage even if observer cleanup is unavailable.
+        }
       }
       sendResponse({ ok: true, settings: { autoFetchEnabled, autoAnalyzeEnabled } });
     })().catch(error => sendResponse({
