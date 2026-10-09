@@ -3,12 +3,13 @@ using JobPilot.Api.Models;
 namespace JobPilot.Api.Services;
 
 /// <summary>
-/// Applies a transparent, deterministic deduction to the model's initial fit estimate.
+/// Applies transparent, deterministic deductions to the model's initial fit estimate.
 /// This is a heuristic, not a statistically calibrated probability of getting hired.
 /// </summary>
 public static class JobFitScoreCalibrator
 {
-    private const int MustHavePenaltyPerGap = 20;
+    private const int UnmetMustHavePenaltyPerGap = 40;
+    private const int UnverifiedMustHavePenaltyPerGap = 20;
     private const int PreferredPenaltyPerGap = 5;
     private const int UnknownSeverityPenaltyPerGap = 8;
 
@@ -26,36 +27,40 @@ public static class JobFitScoreCalibrator
             .Where(gap => gap is not null && !string.IsNullOrWhiteSpace(gap.Requirement))
             .GroupBy(gap => NormalizeRequirement(gap.Requirement), StringComparer.OrdinalIgnoreCase)
             .Select(group => group
-                .OrderByDescending(gap => GetPenalty(gap.Severity))
+                .OrderByDescending(GetPenalty)
                 .First())
             .ToList();
 
-        var mustHaveCount = distinctGaps.Count(gap =>
-            string.Equals(gap.Severity, "Must-have", StringComparison.OrdinalIgnoreCase));
-
-        var preferredCount = distinctGaps.Count(gap =>
-            string.Equals(gap.Severity, "Preferred", StringComparison.OrdinalIgnoreCase));
-
+        var mustHaveUnmetCount = distinctGaps.Count(gap =>
+            IsSeverity(gap, "Must-have") && IsStatus(gap, "Unmet"));
+        var mustHaveUnverifiedCount = distinctGaps.Count(gap =>
+            IsSeverity(gap, "Must-have") && !IsStatus(gap, "Unmet"));
+        var preferredCount = distinctGaps.Count(gap => IsSeverity(gap, "Preferred"));
         var unknownSeverityCount = distinctGaps.Count(gap =>
-            !string.Equals(gap.Severity, "Must-have", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(gap.Severity, "Preferred", StringComparison.OrdinalIgnoreCase));
+            !IsSeverity(gap, "Must-have") && !IsSeverity(gap, "Preferred"));
 
-        var mustHavePenalty = Math.Min(mustHaveCount * MustHavePenaltyPerGap, MaxMustHavePenalty);
+        var rawMustHavePenalty =
+            (mustHaveUnmetCount * UnmetMustHavePenaltyPerGap) +
+            (mustHaveUnverifiedCount * UnverifiedMustHavePenaltyPerGap);
+        var mustHavePenalty = Math.Min(rawMustHavePenalty, MaxMustHavePenalty);
         var preferredPenalty = Math.Min(preferredCount * PreferredPenaltyPerGap, MaxPreferredPenalty);
         var unknownSeverityPenalty = Math.Min(
             unknownSeverityCount * UnknownSeverityPenaltyPerGap,
             MaxUnknownSeverityPenalty);
 
-        var totalPenalty = Math.Min(
-            mustHavePenalty + preferredPenalty + unknownSeverityPenalty,
-            MaxTotalPenalty);
-
+        var uncappedTotal = mustHavePenalty + preferredPenalty + unknownSeverityPenalty;
+        var totalPenalty = Math.Min(uncappedTotal, MaxTotalPenalty);
         result.MatchScore = Math.Clamp(modelScore - totalPenalty, 0, 100);
 
         var adjustments = new List<string>();
-        if (mustHavePenalty > 0)
+        if (mustHaveUnmetCount > 0)
         {
-            adjustments.Add($"{mustHaveCount} must-have gap(s): -{mustHavePenalty}");
+            adjustments.Add($"{mustHaveUnmetCount} explicitly unmet must-have gap(s): -{Math.Min(mustHaveUnmetCount * UnmetMustHavePenaltyPerGap, MaxMustHavePenalty)}");
+        }
+
+        if (mustHaveUnverifiedCount > 0)
+        {
+            adjustments.Add($"{mustHaveUnverifiedCount} unverified must-have gap(s): -{Math.Min(mustHaveUnverifiedCount * UnverifiedMustHavePenaltyPerGap, MaxMustHavePenalty)}");
         }
 
         if (preferredPenalty > 0)
@@ -72,35 +77,101 @@ public static class JobFitScoreCalibrator
             ? "no gap-based deductions"
             : string.Join(", ", adjustments);
 
-        if (totalPenalty < mustHavePenalty + preferredPenalty + unknownSeverityPenalty)
+        if (totalPenalty < uncappedTotal)
         {
             adjustmentText += $"; total deduction capped at {MaxTotalPenalty} points";
         }
 
         var explanation =
             $"Score calibration: model estimate {modelScore}/100; {adjustmentText}; calibrated score {result.MatchScore}/100. This is a heuristic fit score, not a probability of receiving an offer.";
+        result.Rationale = AppendOnce(result.Rationale, explanation);
 
-        if (!result.Rationale.Contains(explanation, StringComparison.OrdinalIgnoreCase))
+        ApplyRecommendationPolicy(result, distinctGaps);
+    }
+
+    private static void ApplyRecommendationPolicy(
+        JobAnalysisResult result,
+        IReadOnlyCollection<RequirementGap> gaps)
+    {
+        var explicitlyUnmetMandatory = gaps.Any(gap =>
+            IsSeverity(gap, "Must-have") && IsStatus(gap, "Unmet"));
+
+        if (explicitlyUnmetMandatory)
         {
-            result.Rationale = string.IsNullOrWhiteSpace(result.Rationale)
-                ? explanation
-                : $"{result.Rationale.TrimEnd()} {explanation}";
+            if (!string.Equals(result.Recommendation, "Skip", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Recommendation = "Skip";
+                result.Rationale = AppendOnce(
+                    result.Rationale,
+                    "Recommendation set to Skip because the candidate profile explicitly conflicts with a mandatory requirement in the vacancy.");
+            }
+
+            return;
+        }
+
+        var hasMandatoryGap = gaps.Any(gap => IsSeverity(gap, "Must-have"));
+        if (hasMandatoryGap)
+        {
+            if (!string.Equals(result.Recommendation, "Review", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Recommendation = "Review";
+                result.Rationale = AppendOnce(
+                    result.Rationale,
+                    "Recommendation set to Review because at least one mandatory requirement remains unverified.");
+            }
+
+            return;
+        }
+
+        // Do not let an obsolete Review recommendation caused only by a removed, irrelevant
+        // language gap block a strong match. Preferred gaps alone do not require Review.
+        var hasOnlyNonBlockingGaps = gaps.All(gap => IsSeverity(gap, "Preferred"));
+        if (result.Recommendation == "Review" &&
+            result.MatchScore >= 80 &&
+            hasOnlyNonBlockingGaps &&
+            result.QuestionsToVerify.Count == 0)
+        {
+            result.Recommendation = "Apply";
+            result.Rationale = AppendOnce(
+                result.Rationale,
+                "Recommendation set to Apply because no mandatory gaps or unresolved questions remain; any remaining gaps are preferred rather than required.");
         }
     }
 
-    private static int GetPenalty(string? severity)
+    private static int GetPenalty(RequirementGap gap)
     {
-        if (string.Equals(severity, "Must-have", StringComparison.OrdinalIgnoreCase))
+        if (IsSeverity(gap, "Must-have"))
         {
-            return MustHavePenaltyPerGap;
+            return IsStatus(gap, "Unmet")
+                ? UnmetMustHavePenaltyPerGap
+                : UnverifiedMustHavePenaltyPerGap;
         }
 
-        if (string.Equals(severity, "Preferred", StringComparison.OrdinalIgnoreCase))
+        if (IsSeverity(gap, "Preferred"))
         {
             return PreferredPenaltyPerGap;
         }
 
         return UnknownSeverityPenaltyPerGap;
+    }
+
+    private static bool IsSeverity(RequirementGap gap, string value) =>
+        string.Equals(gap.Severity, value, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsStatus(RequirementGap gap, string value) =>
+        string.Equals(gap.Status, value, StringComparison.OrdinalIgnoreCase);
+
+    private static string AppendOnce(string? existing, string addition)
+    {
+        if (!string.IsNullOrWhiteSpace(existing) &&
+            existing.Contains(addition, StringComparison.OrdinalIgnoreCase))
+        {
+            return existing;
+        }
+
+        return string.IsNullOrWhiteSpace(existing)
+            ? addition
+            : $"{existing.TrimEnd()} {addition}";
     }
 
     private static string NormalizeRequirement(string requirement) =>
