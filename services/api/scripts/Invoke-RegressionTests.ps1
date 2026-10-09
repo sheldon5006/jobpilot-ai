@@ -166,8 +166,9 @@ function New-ProfileFactCatalog {
         Add-ProfileFactToCatalog $catalog $counters "CER" "certification" ([string]$certification)
     }
     foreach ($language in @($Profile.languages)) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$language.language)) {
-            Add-ProfileFactToCatalog $catalog $counters "LAN" "language" ("{0}: {1}" -f $language.language, $language.proficiency)
+        if (-not [string]::IsNullOrWhiteSpace([string]$language.language) -and
+            -not (Test-ProfilePlaceholder ([string]$language.proficiency))) {
+            Add-ProfileFactToCatalog $catalog $counters "LAN" "language" ("{0}: {1}" -f ([string]$language.language).Trim(), ([string]$language.proficiency).Trim())
         }
     }
     Add-ProfileFactToCatalog $catalog $counters "AUTH" "work_authorization" ([string]$Profile.workAuthorization)
