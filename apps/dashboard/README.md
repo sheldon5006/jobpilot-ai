@@ -4,7 +4,7 @@ A lightweight TypeScript + Vite dashboard for JobPilot AI. It uses the existing 
 
 ## Local development
 
-1. Configure `services/api/candidate-profile.json` and `services/api/appsettings.Local.json` as described in the API README.
+1. Configure `services/api/appsettings.Local.json` as described in the API README. On first startup, the API imports `candidate-profile.json` if you already have one. After that, edit the profile from the dashboard's **My Profile** page.
 2. From the repository root, run the API:
 
    ```powershell
@@ -22,13 +22,15 @@ A lightweight TypeScript + Vite dashboard for JobPilot AI. It uses the existing 
 
 4. Open the local URL printed by Vite (usually `http://127.0.0.1:5173`).
 
-The API uses a local SQLite file at `services/api/jobpilot.db` by default. The database file is ignored by Git. Every successful analysis from either the dashboard or DBot is automatically saved to history. The dashboard can filter saved jobs, open prior results, and update application status and notes.
+The API uses a local SQLite file at `services/api/jobpilot.db` by default. The database file is ignored by Git. Every successful analysis from either the dashboard or DBot is automatically saved to history. The dashboard can filter saved jobs, open prior results, and update application status and notes. **My Profile** displays a career storyboard and lets you edit your summary, experience timeline, skills, education, languages, certifications, work authorisation, and matching notes. Profile changes are saved in the database and used by future analyses.
+
+From each saved job's detail panel, attach the exact CV used for that application as a PDF or DOCX file (maximum 10 MB), download it later, or remove it. A replacement overwrites that job's previous attachment. This stores a CV you already have; automatic per-job CV generation is not implemented yet.
 
 ## Database configuration
 
 SQLite is the default for local development. To use PostgreSQL, set `Database:Provider` to `Postgres` and configure `ConnectionStrings:JobPilot`, or set `DATABASE_URL` to a PostgreSQL URI such as the one provided by a managed database. The API recognises Render/Neon-style `postgresql://` URLs and requires TLS for them.
 
-The API currently creates the initial schema on startup with EF Core `EnsureCreated`. For later schema changes, add and apply EF Core migrations.
+The API creates the initial schema on startup and includes an idempotent compatibility step for the profile and CV attachment tables. For future schema evolution, introduce versioned EF Core migrations.
 
 ## Deployment security
 
