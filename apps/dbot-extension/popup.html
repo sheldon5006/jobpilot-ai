@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>DBot — Job Assistant</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="brand-mark" aria-hidden="true">D</div>
+        <div>
+          <p class="eyebrow">JOBPILOT AI</p>
+          <h1>DBot <span>Job Assistant</span></h1>
+        </div>
+        <span class="version-tag">0.1.0</span>
+      </header>
+
+      <section class="intro" aria-labelledby="intro-title">
+        <p class="eyebrow">JOB ANALYSIS</p>
+        <h2 id="intro-title">Is this role right for you?</h2>
+        <p>Start with a job description. DBot will help you assess the fit against your experience.</p>
+      </section>
+
+      <form id="job-form">
+        <label for="job-title">Job title <span class="optional">(optional)</span></label>
+        <input id="job-title" name="jobTitle" type="text" maxlength="160" placeholder="e.g. Working Student — Software Development" />
+
+        <label for="company">Company <span class="optional">(optional)</span></label>
+        <input id="company" name="company" type="text" maxlength="160" placeholder="e.g. Example GmbH" />
+
+        <label for="job-description">Job description</label>
+        <textarea
+          id="job-description"
+          name="jobDescription"
+          rows="8"
+          minlength="40"
+          required
+          placeholder="Paste the job description here…"
+        ></textarea>
+        <p class="field-hint">For this first prototype, paste the description manually. Page reading and AI analysis will be added in later milestones.</p>
+
+        <button id="analyze-button" class="primary-button" type="submit">
+          <span aria-hidden="true">✦</span>
+          Prepare analysis
+        </button>
+      </form>
+
+      <section id="result" class="result-panel" aria-live="polite" hidden>
+        <div class="result-heading">
+          <span class="result-icon" aria-hidden="true">✓</span>
+          <div>
+            <p class="eyebrow">INPUT CHECK</p>
+            <h2 id="result-title">Description captured</h2>
+          </div>
+        </div>
+        <p id="result-copy"></p>
+        <p id="result-meta" class="result-meta"></p>
+      </section>
+
+      <footer>
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>Prototype · No data is sent or saved yet</span>
+      </footer>
+    </main>
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
+</html>
