@@ -481,7 +481,7 @@ public static class JobRequirementRuleEngine
             if (matches.Count >= 2)
             {
                 if (!TryParseMonthYear(matches[0].Value, out start) ||
-                    !TryParseMonthYear(matches[^1].Value, out end))
+                    !TryParseMonthYear(matches[matches.Count - 1].Value, out end))
                 {
                     return null;
                 }
@@ -605,18 +605,24 @@ public static class JobRequirementRuleEngine
                 ? credentialLabelMatch.Value.Trim()
                 : clause.Trim().Trim(':', '-', '–', ',');
 
+            var requestedCredentialTokens = CredentialTokens(credentialLabel);
+            bool RefersToSameCredential(string? existing)
+            {
+                if (!CertificationTopic.IsMatch(existing ?? string.Empty))
+                {
+                    return false;
+                }
+
+                var existingTokens = CredentialTokens(existing);
+                return requestedCredentialTokens.Count == 0 ||
+                       requestedCredentialTokens.Intersect(existingTokens, StringComparer.OrdinalIgnoreCase).Any();
+            }
+
             result.MatchedRequirements.RemoveAll(item =>
-                item is not null && CertificationTopic.IsMatch(item.Requirement ?? string.Empty) &&
-                CredentialTokens(credentialLabel).All(token =>
-                    CredentialTokens(item.Requirement).Contains(token, StringComparer.OrdinalIgnoreCase)));
+                item is not null && RefersToSameCredential(item.Requirement));
             result.Gaps.RemoveAll(gap =>
-                gap is not null && CertificationTopic.IsMatch(gap.Requirement ?? string.Empty) &&
-                CredentialTokens(credentialLabel).All(token =>
-                    CredentialTokens(gap.Requirement).Contains(token, StringComparer.OrdinalIgnoreCase)));
-            result.QuestionsToVerify.RemoveAll(question =>
-                CertificationTopic.IsMatch(question) &&
-                CredentialTokens(credentialLabel).All(token =>
-                    CredentialTokens(question).Contains(token, StringComparer.OrdinalIgnoreCase)));
+                gap is not null && RefersToSameCredential(gap.Requirement));
+            result.QuestionsToVerify.RemoveAll(question => RefersToSameCredential(question));
 
             var evidence = profile.Certifications?.FirstOrDefault(certification =>
                 !IsPlaceholder(certification ?? string.Empty) &&
