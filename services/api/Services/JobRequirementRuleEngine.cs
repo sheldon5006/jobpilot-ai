@@ -21,6 +21,18 @@ public static class JobRequirementRuleEngine
         @"\b(A1|A2|B1|B2|C1|C2)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex ExplicitExperienceDuration = new(
+        @"\b(?:\d+\+?|one|two|three|four|five|six|seven|eight|nine|ten|several|multiple)\s+(?:years?|months?)(?:['’]s?)?\s+(?:of\s+)?(?:(?:work|relevant|professional|commercial|practical)\s+)?experience\b|\bexperience\b.{0,45}\b(?:\d+\+?|one|two|three|four|five|six|seven|eight|nine|ten|several|multiple)\s+(?:years?|months?)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex EmploymentMetadataGap = new(
+        @"\b(?:employment\s+(?:dates?|duration)|exact\s+(?:employment\s+)?dates?|work\s+history\s+dates?)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex EmploymentMetadataQuestion = new(
+        @"\b(?:employment\s+(?:(?:start|end)\s+)?dates?|exact\s+(?:employment\s+)?dates?|dates?\s+for\s+(?:the\s+)?[\w.-]+\s+roles?)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public static void Apply(
         JobAnalysisRequest request,
         CandidateProfile profile,
@@ -33,6 +45,7 @@ public static class JobRequirementRuleEngine
         var vacancyText = $"{request.JobTitle}\n{request.JobDescription}";
         ApplyLanguage(vacancyText, profile, result, "English", "Englisch");
         ApplyLanguage(vacancyText, profile, result, "German", "Deutsch");
+        ApplyVacancyRelevanceRules(vacancyText, result);
 
         if (string.IsNullOrWhiteSpace(result.Summary))
         {
@@ -43,6 +56,43 @@ public static class JobRequirementRuleEngine
         {
             result.Rationale = "The rationale is based on the candidate profile and the vacancy requirements; unstated language requirements were not scored.";
         }
+    }
+
+    private static void ApplyVacancyRelevanceRules(
+        string vacancyText,
+        JobAnalysisResult result)
+    {
+        // Missing employment dates are not a job-fit gap unless the vacancy makes a duration
+        // requirement explicit. This prevents irrelevant profile placeholders from reducing a score.
+        if (ExplicitExperienceDuration.IsMatch(vacancyText))
+        {
+            return;
+        }
+
+        result.Gaps.RemoveAll(gap =>
+            gap is not null && EmploymentMetadataGap.IsMatch(gap.Requirement ?? string.Empty));
+
+        result.QuestionsToVerify.RemoveAll(question =>
+            EmploymentMetadataQuestion.IsMatch(question));
+
+        result.Summary = RemoveIrrelevantEmploymentMetadataSentences(result.Summary);
+        result.Rationale = RemoveIrrelevantEmploymentMetadataSentences(result.Rationale);
+    }
+
+    private static string RemoveIrrelevantEmploymentMetadataSentences(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var sentences = Regex.Split(text, @"(?<=[.!?])\\s+");
+        return string.Join(" ", sentences.Where(sentence =>
+            !(EmploymentMetadataGap.IsMatch(sentence) &&
+              Regex.IsMatch(
+                  sentence,
+                  @"\\b(?:unknown|unverified|placeholder|gap|verify|verified|missing|not specified)\\b",
+                  RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))).Trim();
     }
 
     private static void ApplyLanguage(
