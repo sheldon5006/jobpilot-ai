@@ -20,25 +20,48 @@ Edit `candidate-profile.json` with your accurate experience, dates, qualificatio
 
 The API reads it from the API content directory by default. Override the path with `DBOT_PROFILE_PATH` if needed.
 
-## 2. Configure the Gemini key in a local file
+## 2. Configure the AI provider
 
-1. From this directory, copy the example configuration:
+Copy the local settings template if you have not already created your local settings file:
 
 ```powershell
 Copy-Item .\appsettings.Local.example.json .\appsettings.Local.json
-```
-
-2. Open `appsettings.Local.json` in your editor and replace `PASTE_YOUR_NEW_GEMINI_API_KEY_HERE` with your new key. Set the model to `gemini-3.1-flash-lite` for the faster, cost-efficient default used by DBot, or choose another model currently available to your API project.
-
-```powershell
 notepad .\appsettings.Local.json
 ```
 
-The API explicitly loads `appsettings.Local.json` at startup. The file is ignored by Git; the tracked example contains only a placeholder. Do not copy a real key into the example file, commit it, share it, or publish it. This is plain-text local development storage, not encryption; anyone with access to your Windows account and file can read it. The API also continues to support `GEMINI_API_KEY` and `GEMINI_MODEL` environment variables as fallbacks.
+The API loads `appsettings.Local.json` at startup. This file is ignored by Git. Never commit or share it. It is plain-text storage, not encryption.
 
-The API does not fall back to paid use automatically.
+### Option A: Gemini
 
-**Free-tier privacy note:** Google's Gemini API pricing page states that free-tier content may be used to improve its products. DBot sends the job description and candidate profile only when you explicitly click Analyze. Keep personal identifiers such as phone number, home address and email out of the analysis profile unless you have a clear reason to send them.
+Set `AI.Provider` to `Gemini`, and replace `PASTE_YOUR_NEW_GEMINI_API_KEY_HERE` with your API key. The default model is `gemini-3.1-flash-lite`. You can leave the Ollama section in the file; it is ignored while Gemini is selected.
+
+Gemini free-tier limits apply. Google's free-tier data terms may allow submitted content to be used to improve Google products, so avoid adding unnecessary personal identifiers to your candidate profile. The API does not fall back to paid use automatically.
+
+### Option B: Local Ollama
+
+Make sure Ollama is running and the local model is available:
+
+```powershell
+ollama list
+```
+
+Use the already-downloaded `qwen3:4b` model, or download it with `ollama pull qwen3:4b`. Then set these local settings:
+
+```json
+{
+  "AI": {
+    "Provider": "Ollama"
+  },
+  "Ollama": {
+    "BaseUrl": "http://127.0.0.1:11434",
+    "Model": "qwen3:4b"
+  }
+}
+```
+
+Keep the `Gemini` section if you may want to switch back later; no Gemini API key is required when `AI.Provider` is `Ollama`. Local mode sends analysis requests to your Ollama service instead of Gemini and does not consume Gemini API quota.
+
+**After changing the provider or model, restart the ASP.NET Core API.**
 
 ## 3. Run the API
 
