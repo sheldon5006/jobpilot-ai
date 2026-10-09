@@ -34,6 +34,24 @@ jobs:
       - name: Run backend unit tests
         run: dotnet test services/api.tests/JobPilot.Api.Tests.csproj --configuration Release
 
+
+  dashboard-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Type check
+        run: npm run typecheck
+      - name: Build dashboard
+        run: npm run build
+
   extension-build:
     runs-on: ubuntu-latest
     defaults:
