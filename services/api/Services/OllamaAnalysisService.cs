@@ -47,13 +47,15 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
 
             Return concise JSON matching the supplied schema:
             - englishSummary: always plain English; if the vacancy is German or another language, explain the role and main responsibilities in 2–3 short sentences; never mention candidate fit.
+            - keyRequirements: 3–6 concise requirements explicitly stated in the vacancy. Prioritise language level, education/enrolment, weekly hours/availability, location/on-site attendance, and must-have skills or experience. Do not return only a generic job category such as "Werkstudent".
+            - candidateExpectations: 3–5 short English points describing what an applicant is expected to bring or be available for, based on explicit candidate requirements and eligibility details.
             - summary and rationale: evidence-based fit, using profile facts.
             - recommendation: exactly Apply, Review, or Skip; matchScore: integer 0–100.
             - detectedLanguage: language of the original vacancy.
             - matchedRequirements: requirement, evidenceIds (array of exact profile fact IDs), and evidence; never use vacancy text as candidate evidence or invent IDs. The API validates references and renders evidence from validated facts.
             - gaps: requirement, severity (Must-have, Preferred, Unknown), status (Unverified or Unmet), explanation. Use Unmet only for explicit profile conflict; missing/placeholder data is Unverified.
             - questionsToVerify: only material requirement/eligibility questions; no generic profile-maintenance questions (for example, missing dates unless the vacancy makes them relevant).
-            Be concise and do not repeat the vacancy unnecessarily.
+            Be concise and do not repeat the vacancy unnecessarily. Limit keyRequirements to 6 points, candidateExpectations to 5 points, matchedRequirements to 5 items, evidenceIds to at most 2 per match, gaps to 5 items, and questionsToVerify to 3 items. Each requirement/expectation must be a short phrase. Include stated language and availability requirements.
             """;
 
         // Ollama supports JSON Schema as the format property. This constrains field names,
@@ -67,6 +69,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
                 matchScore = new { type = "integer", minimum = 0, maximum = 100 },
                 detectedLanguage = new { type = "string" },
                 englishSummary = new { type = "string" },
+                keyRequirements = new { type = "array", items = new { type = "string" } },
+                candidateExpectations = new { type = "array", items = new { type = "string" } },
                 summary = new { type = "string" },
                 matchedRequirements = new
                 {
@@ -106,8 +110,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             },
             required = new[]
             {
-                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "summary",
-                "matchedRequirements", "gaps", "questionsToVerify", "rationale"
+                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "keyRequirements",
+                "candidateExpectations", "summary", "matchedRequirements", "gaps", "questionsToVerify", "rationale"
             },
             additionalProperties = false
         };
@@ -123,7 +127,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             options = new
             {
                 temperature = 0.1,
-                num_predict = 900,
+                num_predict = 1200,
                 num_ctx = 4096
             },
             keep_alive = "10m"
