@@ -19,7 +19,6 @@ jobpilot-ai/
 │   └── dashboard/        # TypeScript + Vite job-search dashboard
 ├── services/
 │   └── api/              # ASP.NET Core API + Gemini analysis
-├── database/             # PostgreSQL / EF Core migrations (later milestone)
 ├── docs/                 # Architecture and development notes
 ├── .gitignore
 └── README.md
@@ -27,14 +26,15 @@ jobpilot-ai/
 
 Folders are introduced incrementally so each milestone can be run and verified locally.
 
-## Current milestone: AI job-description analysis
+## Current milestone: analysis history and personal dashboard
 
-1. Paste a job description into DBot.
-2. Send it to the local ASP.NET Core API only when you click **Analyze job fit**.
-3. The API reads the local candidate profile and calls the configurable Gemini API model.
-4. DBot displays an **Apply**, **Review**, or **Skip** recommendation, fit score, matched requirements, gaps, and questions to verify.
+1. Analyse a job in DBot or paste a description into the dashboard.
+2. The ASP.NET Core API reads the configured candidate profile and calls Gemini or Ollama.
+3. Each successful analysis is saved to a local SQLite database by default.
+4. The dashboard lists saved jobs and recommendations, and lets you update application status and notes.
+5. PostgreSQL can be configured for hosted deployment.
 
-See [the API setup guide](services/api/README.md) and [the extension setup guide](apps/dbot-extension/README.md).
+See [the API setup guide](services/api/README.md), [the extension setup guide](apps/dbot-extension/README.md), and [the dashboard guide](apps/dashboard/README.md).
 
 ## Architecture
 
