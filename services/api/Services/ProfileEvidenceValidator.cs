@@ -83,11 +83,6 @@ public static class ProfileEvidenceValidator
                 continue;
             }
 
-            if (relevantFacts.Count != citedFacts.Count)
-            {
-                warnings.Add($"'{match.Requirement.Trim()}' cited facts from an unrelated category; only relevant facts were retained.");
-            }
-
             match.EvidenceIds = relevantFacts.Select(fact => fact.Id).ToList();
             match.Evidence = string.Join(" ", relevantFacts.Select(fact => fact.Text));
             validMatches.Add(match);
