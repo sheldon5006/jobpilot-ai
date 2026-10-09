@@ -5,8 +5,8 @@ Local ASP.NET Core API for DBot job-description analysis.
 ## Requirements
 
 - .NET 10 SDK
-- A Gemini API key created through Google AI Studio
-- The free tier may have rate limits. No automatic paid fallback is implemented.
+- Either Ollama with the `qwen3:4b` model, or a Gemini API key created through Google AI Studio
+- Gemini free-tier limits may apply. No automatic paid fallback is implemented.
 
 ## 1. Configure the candidate profile
 
@@ -95,7 +95,7 @@ Invoke-RestMethod -Uri http://127.0.0.1:5080/api/jobs/analyze -Method Post -Cont
 ## Current boundaries
 
 - Job descriptions and candidate profile are not stored by this API.
-- The Gemini key stays on the backend and is never returned to the browser.
+- In Gemini mode, the Gemini key stays on the backend and is never returned to the browser.
 - Analysis is decision support only. It does not submit applications.
 - If required profile facts are unknown, the model should flag them for review.
 - Free-tier quota errors are returned clearly; there is no paid-provider fallback.
