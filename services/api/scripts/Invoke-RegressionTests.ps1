@@ -416,6 +416,12 @@ function Get-QualityIssues {
         }
     }
 
+    foreach ($warning in @($Result.requirementValidationWarnings)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$warning)) {
+            $issues.Add("VACANCY_REQUIREMENT_VALIDATION_WARNING: '$warning'")
+        }
+    }
+
     # The score exposed by the API must agree with its calibration breakdown.
     $rationale = [string]$Result.rationale
     $calibrationMatch = [regex]::Match(
