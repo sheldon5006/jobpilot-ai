@@ -14,14 +14,14 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         CandidateProfile profile,
         CancellationToken cancellationToken)
     {
-        var apiKey = configuration["GEMINI_API_KEY"];
+        var apiKey = configuration["Gemini:ApiKey"] ?? configuration["GEMINI_API_KEY"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             throw new InvalidOperationException(
-                "GEMINI_API_KEY is not configured. Set it as an environment variable before running the API.");
+                "Gemini API key is not configured. Add Gemini:ApiKey to appsettings.Local.json or set GEMINI_API_KEY.");
         }
 
-        var model = configuration["GEMINI_MODEL"];
+        var model = configuration["Gemini:Model"] ?? configuration["GEMINI_MODEL"];
         if (string.IsNullOrWhiteSpace(model))
         {
             model = "gemini-3.8-flash";
