@@ -555,6 +555,12 @@ public static class JobRequirementRuleEngine
 
     private static string BuildExperienceEvidence(CandidateProfile profile, int months)
     {
+        var periodMonths = GetExperienceMonthsFromPeriods(profile.Experience);
+        if (periodMonths.HasValue && periodMonths.Value >= months)
+        {
+            return $"The dated entries in the candidate profile establish approximately {months / 12.0:0.0} years of professional experience.";
+        }
+
         var summary = profile.ProfessionalSummary?.Trim() ?? string.Empty;
         if (SummaryExperienceAmount.IsMatch(summary))
         {
