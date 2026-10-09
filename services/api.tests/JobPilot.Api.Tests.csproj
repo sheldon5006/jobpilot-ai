@@ -15,6 +15,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\services\api\JobPilot.Api.csproj" />
+    <ProjectReference Include="..\api\JobPilot.Api.csproj" />
   </ItemGroup>
 </Project>
