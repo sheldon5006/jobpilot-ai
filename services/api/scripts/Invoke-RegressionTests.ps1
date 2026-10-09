@@ -394,6 +394,7 @@ function Invoke-JobAnalysis {
         jobTitle = $Case.JobTitle
         company = "DBot Automated Regression Test"
         jobDescription = $Case.JobDescription
+        saveToHistory = $false
     } | ConvertTo-Json -Depth 8
 
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
