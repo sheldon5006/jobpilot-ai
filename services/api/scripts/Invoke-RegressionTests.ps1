@@ -365,7 +365,8 @@ function Test-ExpectedScenario {
         "6 - Werkstudent enrolment" {
             $educationText = (@($profile.education) -join " ")
             $constraintsText = (@($profile.constraints) -join " ")
-            $activeStudent = $educationText -match "\b(?:in\s+progress|ongoing|currently\s+studying|currently\s+enrolled|enrolled|expected\s+graduation|expected\s+completion)\b"
+            $activeStudent = $educationText -match "\b(?:in\s+progress|ongoing|currently\s+studying|currently\s+enrolled|enrolled|expected\s+graduation|expected\s+completion)\b" -and
+                $educationText -notmatch "\b(?:replace|unknown|not\s+specified|not\s+provided|tbd|n/a)\b"
             $notEnrolled = ($educationText + " " + $constraintsText) -match "\b(?:not\s+currently\s+enrolled|not\s+enrolled|not\s+currently\s+studying|no\s+longer\s+enrolled)\b"
             $studentGaps = @($gaps | Where-Object { $_.requirement -match "Werkstudent|working student|enrolled|enrollment|enrolment|student status" })
 
