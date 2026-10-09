@@ -237,6 +237,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         };
 
         JobRequirementRuleEngine.Apply(request, profile, result);
+        VacancyRequirementValidator.Apply(request, result);
         ProfileEvidenceValidator.Apply(profile, result);
         JobFitScoreCalibrator.Apply(result);
         result.RequiresHumanReview = true;
