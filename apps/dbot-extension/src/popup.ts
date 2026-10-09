@@ -22,6 +22,7 @@ interface JobAnalysisResult {
   rationale: string;
   mandatoryRequirementsStatus: string;
   evidenceValidationWarnings: string[];
+  requirementValidationWarnings: string[];
   requiresHumanReview: boolean;
   note: string;
 }
@@ -58,6 +59,8 @@ const resultCopy = element<HTMLElement>("#result-copy");
 const mandatoryStatus = element<HTMLElement>("#mandatory-status");
 const evidenceWarningSection = element<HTMLElement>("#evidence-warning-section");
 const evidenceWarningsList = element<HTMLUListElement>("#evidence-warnings-list");
+const requirementWarningSection = element<HTMLElement>("#requirement-warning-section");
+const requirementWarningsList = element<HTMLUListElement>("#requirement-warnings-list");
 const resultMeta = element<HTMLElement>("#result-meta");
 const matchesList = element<HTMLUListElement>("#matches-list");
 const gapsList = element<HTMLUListElement>("#gaps-list");
@@ -157,6 +160,9 @@ function renderAnalysis(result: JobAnalysisResult): void {
   englishSummary.textContent = result.englishSummary || "No English summary was returned.";
   resultCopy.textContent = [result.summary, result.rationale].filter(Boolean).join(" ");
   mandatoryStatus.textContent = result.mandatoryRequirementsStatus || "Unknown";
+  const requirementWarnings = Array.isArray(result.requirementValidationWarnings) ? result.requirementValidationWarnings : [];
+  requirementWarningSection.hidden = requirementWarnings.length === 0;
+  renderStrings(requirementWarningsList, requirementWarnings, "No vacancy requirement warnings.");
   const warnings = Array.isArray(result.evidenceValidationWarnings) ? result.evidenceValidationWarnings : [];
   evidenceWarningSection.hidden = warnings.length === 0;
   renderStrings(evidenceWarningsList, warnings, "No evidence warnings.");
@@ -191,6 +197,8 @@ function renderError(message: string): void {
   mandatoryStatus.textContent = "Unknown — analysis not completed.";
   evidenceWarningSection.hidden = true;
   showEmptyList(evidenceWarningsList, "Not available.");
+  requirementWarningSection.hidden = true;
+  showEmptyList(requirementWarningsList, "Not available.");
   resultMeta.textContent = "Check the API setup, candidate profile and free-tier quota, then try again.";
   showEmptyList(matchesList, "Not available.");
   showEmptyList(gapsList, "Not available.");
