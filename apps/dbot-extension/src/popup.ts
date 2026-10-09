@@ -108,7 +108,7 @@ function renderKeyRequirements(result: JobAnalysisResult): void {
   const seen = new Set<string>();
   const requirements: string[] = [];
   for (const candidate of candidates) {
-    const requirement = String(candidate.requirement || "").replace(/\\s+/g, " ").trim();
+    const requirement = String(candidate.requirement || "").replace(/\s+/g, " ").trim();
     const key = requirement.toLocaleLowerCase();
     if (!requirement || seen.has(key)) continue;
     seen.add(key);
