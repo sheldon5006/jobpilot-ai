@@ -66,7 +66,7 @@ public static class JobRequirementRuleEngine
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ExplicitlyNotRequiredCue = new(
-        @"\b(?:not\s+required|not\s+mandatory|no\s+(?:certificate|certification|licen[cs]e)\s+required)\b",
+        @"\b(?:not\s+required|not\s+mandatory|no(?:\s+\w+){0,4}\s+(?:certificate|certification|licen[cs]e)\s+(?:is\s+)?required)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex NamedCredential = new(
@@ -164,6 +164,8 @@ public static class JobRequirementRuleEngine
         // mentions visas, sponsorship, permits, or an explicit right-to-work condition.
         if (!WorkAuthorizationTopic.IsMatch(vacancyText))
         {
+            result.MatchedRequirements.RemoveAll(item =>
+                item is not null && WorkAuthorizationTopic.IsMatch(item.Requirement ?? string.Empty));
             result.Gaps.RemoveAll(gap =>
                 gap is not null && WorkAuthorizationTopic.IsMatch(gap.Requirement ?? string.Empty));
 
@@ -172,6 +174,49 @@ public static class JobRequirementRuleEngine
 
             result.Summary = RemoveSentencesMentioningWorkAuthorization(result.Summary);
             result.Rationale = RemoveSentencesMentioningWorkAuthorization(result.Rationale);
+        }
+
+        // Student-status questions are only relevant to a working-student role or an
+        // explicitly stated enrolment condition, not to ordinary software roles.
+        if (!StudentRoleCue.IsMatch(vacancyText) && !StudentEnrollmentCue.IsMatch(vacancyText))
+        {
+            result.MatchedRequirements.RemoveAll(item =>
+                item is not null && StudentEnrollmentEntryTopic.IsMatch(item.Requirement ?? string.Empty));
+            result.Gaps.RemoveAll(gap =>
+                gap is not null && StudentEnrollmentEntryTopic.IsMatch(gap.Requirement ?? string.Empty));
+            result.QuestionsToVerify.RemoveAll(question =>
+                StudentEnrollmentEntryTopic.IsMatch(question ?? string.Empty));
+        }
+
+        // A certification/licence is not a gap unless the vacancy makes that credential
+        // mandatory or preferred. Mentions such as "no certificate is required" must not
+        // survive as a candidate gap.
+        var hasCredentialCondition = SplitClauses(vacancyText).Any(clause =>
+        {
+            if (!CertificationTopic.IsMatch(clause) || ExplicitlyNotRequiredCue.IsMatch(clause))
+            {
+                return Regex.IsMatch(
+                    clause,
+                    @"\b(?:preferred|nice\s+to\s+have|advantage|a\s+plus|desirable)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+                    CertificationTopic.IsMatch(clause);
+            }
+
+            return CredentialRequirementCue.IsMatch(clause) ||
+                Regex.IsMatch(
+                    clause,
+                    @"\b(?:preferred|nice\s+to\s+have|advantage|a\s+plus|desirable)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        });
+
+        if (!hasCredentialCondition)
+        {
+            result.MatchedRequirements.RemoveAll(item =>
+                item is not null && CertificationTopic.IsMatch(item.Requirement ?? string.Empty));
+            result.Gaps.RemoveAll(gap =>
+                gap is not null && CertificationTopic.IsMatch(gap.Requirement ?? string.Empty));
+            result.QuestionsToVerify.RemoveAll(question =>
+                CertificationTopic.IsMatch(question ?? string.Empty));
         }
     }
 
