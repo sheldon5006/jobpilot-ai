@@ -161,6 +161,12 @@ $cases = @(
         JobTitle = "Werkstudent Software Developer (.NET)"
         JobDescription = "Applicants must be currently enrolled at a university throughout employment. Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. No additional degree, language, or employment-duration requirement is specified."
         ExpectedQuestionPattern = "enrolled|student status|university|education"
+    },
+    [pscustomobject]@{
+        Name = "7 - Minimum experience threshold"
+        JobTitle = "Senior .NET Software Developer"
+        JobDescription = "Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. A minimum of 10 years of relevant professional experience is mandatory. No language, degree, or certification requirement is specified."
+        ExpectedQuestionPattern = "experience|years|dates"
     }
 )
 
@@ -387,6 +393,34 @@ function Test-ExpectedScenario {
                 $studentGaps[0].severity -eq "Must-have" -and
                 $studentGaps[0].status -eq "Unverified" -and
                 $questions.Count -eq 1
+            )
+        }
+        "7 - Minimum experience threshold" {
+            $experienceGaps = @($gaps | Where-Object {
+                $_.requirement -match "\b(?:years?|yrs?|months?)\b" -and
+                $_.requirement -match "\bexperience\b"
+            })
+            $experienceMatches = @($Result.matchedRequirements | Where-Object {
+                $_.requirement -match "\b(?:years?|yrs?|months?)\b" -and
+                $_.requirement -match "\bexperience\b"
+            })
+
+            if ($experienceGaps.Count -eq 1) {
+                if ($experienceGaps[0].severity -ne "Must-have") { return $false }
+                if ($experienceGaps[0].status -eq "Unmet") {
+                    return $Result.recommendation -eq "Skip" -and $questions.Count -eq 0
+                }
+                if ($experienceGaps[0].status -eq "Unverified") {
+                    return $Result.recommendation -eq "Review" -and $questions.Count -eq 1
+                }
+                return $false
+            }
+
+            return (
+                $experienceGaps.Count -eq 0 -and
+                $experienceMatches.Count -eq 1 -and
+                $Result.recommendation -eq "Apply" -and
+                $questions.Count -eq 0
             )
         }
     }
