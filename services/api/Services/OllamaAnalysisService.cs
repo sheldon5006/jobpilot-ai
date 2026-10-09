@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using JobPilot.Api.Models;
 
 namespace JobPilot.Api.Services;
@@ -66,7 +65,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             Never use the job ad itself as evidence that the candidate meets a requirement. For example,
             if the job requires English but the candidate's English proficiency is a placeholder or absent
             in CANDIDATE PROFILE JSON, do not list English as matched; add a Must-have gap and a question.
-            Every gap must include requirement, severity (Must-have, Preferred, or Unknown), and explanation.
+            Every gap must include requirement, severity (Must-have, Preferred, or Unknown), status (Unverified or Unmet), and explanation.
+            Use Unmet only when the profile explicitly conflicts with the stated requirement; otherwise use Unverified.
             Only ask questions material to the job requirements or eligibility; don't ask about employment
             dates unless the job ad makes them relevant. Do not infer missing facts. Be concise.
             """;
@@ -108,9 +108,10 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
                         {
                             requirement = new { type = "string" },
                             severity = new { type = "string", @enum = new[] { "Must-have", "Preferred", "Unknown" } },
+                            status = new { type = "string", @enum = new[] { "Unverified", "Unmet" } },
                             explanation = new { type = "string" }
                         },
-                        required = new[] { "requirement", "severity", "explanation" },
+                        required = new[] { "requirement", "severity", "status", "explanation" },
                         additionalProperties = false
                     }
                 },
@@ -207,9 +208,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             _ => "Review"
         };
 
-        // Independently validate a common high-impact rule: the job requires English,
-        // but the candidate profile must explicitly state a non-placeholder proficiency.
-        EnsureRequiredEnglishEvidence(request, profile, result);
+        // Reconcile model output with language requirements explicitly stated in the vacancy.
+        JobRequirementRuleEngine.Apply(request, profile, result);
 
         var hasMustHaveGap = result.Gaps.Any(g =>
             g is not null &&
@@ -228,121 +228,6 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
         result.RequiresHumanReview = true;
         result.Note = "AI-assisted recommendation only. Check the evidence before applying; no application has been submitted.";
         return result;
-    }
-
-    private static void EnsureRequiredEnglishEvidence(
-        JobAnalysisRequest request,
-        CandidateProfile profile,
-        JobAnalysisResult result)
-    {
-        var description = request.JobDescription ?? string.Empty;
-        var englishIsRequired =
-            Regex.IsMatch(
-                description,
-                @"\bEnglish\b.{0,80}\b(required|mandatory|essential|must[- ]have)\b",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
-            Regex.IsMatch(
-                description,
-                @"\b(required|mandatory|essential|must[- ]have)\b.{0,80}\bEnglish\b",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-        if (!englishIsRequired)
-        {
-            return;
-        }
-
-        var englishProfileEntry = profile.Languages?.FirstOrDefault(language =>
-            string.Equals(language.Language, "English", StringComparison.OrdinalIgnoreCase));
-        var proficiency = englishProfileEntry?.Proficiency?.Trim();
-
-        var proficiencyIsUnverified =
-            string.IsNullOrWhiteSpace(proficiency) ||
-            proficiency.Contains("replace", StringComparison.OrdinalIgnoreCase) ||
-            proficiency.Contains("unknown", StringComparison.OrdinalIgnoreCase) ||
-            proficiency.Contains("not specified", StringComparison.OrdinalIgnoreCase) ||
-            proficiency.Contains("not provided", StringComparison.OrdinalIgnoreCase) ||
-            proficiency.Equals("tbd", StringComparison.OrdinalIgnoreCase) ||
-            proficiency.Equals("n/a", StringComparison.OrdinalIgnoreCase);
-
-        if (!proficiencyIsUnverified)
-        {
-            return;
-        }
-
-        result.MatchedRequirements.RemoveAll(match =>
-            match is not null &&
-            match.Requirement.Contains("English", StringComparison.OrdinalIgnoreCase));
-
-        const string requirement = "English communication skills";
-        const string explanation =
-            "The job description marks English as required, but the candidate profile does not contain a verified English proficiency level.";
-
-        var existingGap = result.Gaps.FirstOrDefault(gap =>
-            gap is not null &&
-            gap.Requirement.Contains("English", StringComparison.OrdinalIgnoreCase));
-
-        if (existingGap is null)
-        {
-            result.Gaps.Add(new RequirementGap
-            {
-                Requirement = requirement,
-                Severity = "Must-have",
-                Explanation = explanation
-            });
-        }
-        else
-        {
-            existingGap.Requirement = requirement;
-            existingGap.Severity = "Must-have";
-            existingGap.Explanation = explanation;
-        }
-
-        if (!result.QuestionsToVerify.Any(question =>
-            question.Contains("English", StringComparison.OrdinalIgnoreCase)))
-        {
-            result.QuestionsToVerify.Add(
-                "What is your current English proficiency level? Update the candidate profile with an accurate level.");
-        }
-
-        result.Summary = RemoveUnsupportedEnglishClaims(result.Summary);
-        result.Rationale = RemoveUnsupportedEnglishClaims(result.Rationale);
-
-        result.Summary = AppendOnce(
-            result.Summary,
-            "The role's required English proficiency is not verified in the candidate profile and must be confirmed before applying.");
-        result.Rationale = AppendOnce(
-            result.Rationale,
-            "The job requires English, but the candidate profile's English proficiency is missing or still a placeholder, so this mandatory requirement remains unverified.");
-    }
-
-    private static string RemoveUnsupportedEnglishClaims(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return text;
-        }
-
-        var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
-        var retained = sentences.Where(sentence =>
-        {
-            if (!sentence.Contains("English", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var claimsPositiveProficiency = Regex.IsMatch(
-                sentence,
-                @"\b(confirmed|verified|proficient|fluent|demonstrates?|meets?|matches?|matched|satisfies|sufficient)\b",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            var explicitlyAcknowledgesUncertainty = Regex.IsMatch(
-                sentence,
-                @"\b(not|no|unknown|unverified|unconfirmed|missing|gap|confirm|verify)\b",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-            return !(claimsPositiveProficiency && !explicitlyAcknowledgesUncertainty);
-        });
-
-        return string.Join(" ", retained).Trim();
     }
 
     private static string AppendOnce(string existing, string addition)
