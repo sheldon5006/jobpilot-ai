@@ -98,7 +98,6 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             generationConfig = new
             {
                 responseMimeType = "application/json",
-                temperature = 0.2,
                 maxOutputTokens = 1800
             }
         };
