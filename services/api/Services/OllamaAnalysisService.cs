@@ -22,7 +22,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             Only assess requirements that are actually stated in the vacancy. Clearly distinguish required qualifications from preferences. Do not treat the vacancy itself as proof the candidate meets a requirement. Keep professional experience separate from academic or project work.
             When the vacancy asks for an important fact that the profile does not establish, mark it Unverified and ask a short, direct question in natural everyday English. Ask only about details relevant to a stated job requirement. Do not ask for employment dates or calculate a minimum duration unless the vacancy states an experience threshold. Do not mention internal profile field names or tell the user to edit JSON.
             Use Apply for a strong evidenced match, Review when an important required fact is unclear, and Skip only when the profile clearly conflicts with a mandatory requirement. Preferences alone should not block applying. The score is a rough fit estimate, not hiring probability.
-            For non-English vacancies, identify the original language and summarise the vacancy in English. Return one valid JSON object only, without Markdown.
+            Always write englishSummary in plain English, including when the vacancy is written in German or another language. Summarise what the role does, its main responsibilities, and the most important requirements in 2–3 short sentences; translate the meaning rather than copying non-English wording. Keep englishSummary about the vacancy only, never about the candidate. Also identify the vacancy's original language in detectedLanguage. Return one valid JSON object only, without Markdown.
             """;
 
         var jobDetails = new
@@ -46,14 +46,16 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             {JsonSerializer.Serialize(jobDetails, JsonOptions)}
 
             Return concise JSON matching the supplied schema:
-            - englishSummary: vacancy only; do not mention candidate fit.
+            - englishSummary: always plain English; if the vacancy is German or another language, explain the role and main responsibilities in 2–3 short sentences; never mention candidate fit.
+            - keyRequirements: 3–6 concise requirements explicitly stated in the vacancy. Prioritise language level, education/enrolment, weekly hours/availability, location/on-site attendance, and must-have skills or experience. Do not return only a generic job category such as "Werkstudent".
+            - candidateExpectations: 3–5 short English points describing what an applicant is expected to bring or be available for, based on explicit candidate requirements and eligibility details.
             - summary and rationale: evidence-based fit, using profile facts.
             - recommendation: exactly Apply, Review, or Skip; matchScore: integer 0–100.
             - detectedLanguage: language of the original vacancy.
             - matchedRequirements: requirement, evidenceIds (array of exact profile fact IDs), and evidence; never use vacancy text as candidate evidence or invent IDs. The API validates references and renders evidence from validated facts.
             - gaps: requirement, severity (Must-have, Preferred, Unknown), status (Unverified or Unmet), explanation. Use Unmet only for explicit profile conflict; missing/placeholder data is Unverified.
             - questionsToVerify: only material requirement/eligibility questions; no generic profile-maintenance questions (for example, missing dates unless the vacancy makes them relevant).
-            Be concise and do not repeat the vacancy unnecessarily.
+            Be concise and do not repeat the vacancy unnecessarily. Limit keyRequirements to 6 points, candidateExpectations to 5 points, matchedRequirements to 5 items, evidenceIds to at most 2 per match, gaps to 5 items, and questionsToVerify to 3 items. Each requirement/expectation must be a short phrase. Include stated language and availability requirements.
             """;
 
         // Ollama supports JSON Schema as the format property. This constrains field names,
@@ -67,6 +69,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
                 matchScore = new { type = "integer", minimum = 0, maximum = 100 },
                 detectedLanguage = new { type = "string" },
                 englishSummary = new { type = "string" },
+                keyRequirements = new { type = "array", items = new { type = "string" } },
+                candidateExpectations = new { type = "array", items = new { type = "string" } },
                 summary = new { type = "string" },
                 matchedRequirements = new
                 {
@@ -106,8 +110,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             },
             required = new[]
             {
-                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "summary",
-                "matchedRequirements", "gaps", "questionsToVerify", "rationale"
+                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "keyRequirements",
+                "candidateExpectations", "summary", "matchedRequirements", "gaps", "questionsToVerify", "rationale"
             },
             additionalProperties = false
         };
@@ -123,7 +127,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             options = new
             {
                 temperature = 0.1,
-                num_predict = 900,
+                num_predict = 1200,
                 num_ctx = 4096
             },
             keep_alive = "10m"
@@ -179,6 +183,8 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
             throw new OllamaApiException("Ollama returned an empty analysis.", (int)HttpStatusCode.BadGateway);
         }
 
+        result.KeyRequirements ??= [];
+        result.CandidateExpectations ??= [];
         result.MatchedRequirements ??= [];
         result.Gaps ??= [];
         result.QuestionsToVerify ??= [];

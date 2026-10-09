@@ -36,7 +36,7 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             Only assess requirements that are actually stated in the vacancy. Clearly distinguish required qualifications from preferences. Do not treat the vacancy itself as proof the candidate meets a requirement. Keep professional experience separate from academic or project work.
             When the vacancy asks for an important fact that the profile does not establish, mark it Unverified and ask a short, direct question in natural everyday English. Ask only about details relevant to a stated job requirement. Do not ask for employment dates or calculate a minimum duration unless the vacancy states an experience threshold. Do not mention internal profile field names or tell the user to edit JSON.
             Use Apply for a strong evidenced match, Review when an important required fact is unclear, and Skip only when the profile clearly conflicts with a mandatory requirement. Preferences alone should not block applying. The score is a rough fit estimate, not hiring probability.
-            For non-English vacancies, identify the original language and summarise the vacancy in English. Return one valid JSON object only, without Markdown.
+            Always write englishSummary in plain English, including when the vacancy is written in German or another language. Summarise what the role does, its main responsibilities, and the most important requirements in 2–3 short sentences; translate the meaning rather than copying non-English wording. Keep englishSummary about the vacancy only, never about the candidate. Also identify the vacancy's original language in detectedLanguage. Return one valid JSON object only, without Markdown.
             """;
 
         var jobDetails = new
@@ -63,14 +63,17 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             - recommendation: Apply, Review, or Skip
             - matchScore: integer 0–100
             - detectedLanguage: original vacancy language
-            - englishSummary: vacancy/role/requirements only, never candidate fit
+            - englishSummary: always in plain English; for a German or other non-English JD, explain the role and key responsibilities in 2–3 short sentences, without candidate-fit commentary
+            - keyRequirements: 3–6 concise requirements explicitly stated in the vacancy. Prioritise language level, education/enrolment, weekly hours/availability, location/on-site attendance, and must-have skills or experience. Do not return generic labels like "Werkstudent" instead of actual requirements.
+            - candidateExpectations: 3–5 short English points describing what an applicant is expected to bring or be available for, based on explicit candidate requirements and eligibility details.
             - summary: concise overall fit
             - matchedRequirements: [{requirement, evidence, evidenceIds}]. evidenceIds must contain exact IDs from PROFILE FACTS JSON; the API validates IDs and renders evidence from validated profile facts.
             - gaps: [{requirement, severity, status, explanation}], where severity is Must-have, Preferred, or Unknown; status is Unverified or Unmet
             - questionsToVerify: material requirement/eligibility questions only
             - rationale: recommendation supported by profile facts
 
-            Use Unmet only for an explicit profile conflict (for example, B1 stated against mandatory C2); missing or placeholder information is Unverified. The vacancy is never proof the candidate meets a requirement. Do not present academic/project skills as professional experience. Be concise and avoid repeating the vacancy.
+            Use Unmet only for an explicit profile conflict (for example, B1 stated against mandatory C2); missing or placeholder information is Unverified. The vacancy is never proof the candidate meets a requirement. Do not present academic/project skills as professional experience.
+            Keep output compact to prevent truncation: return at most 6 keyRequirements, 5 candidateExpectations, 5 matchedRequirements, 2 evidenceIds per match, 5 gaps, and 3 questionsToVerify. Each requirement/expectation must be a short phrase, not a paragraph. Include language and availability requirements whenever stated. Each evidence, explanation, summary, and rationale should be one short sentence. Cite only the minimum profile-fact IDs needed to support each match; never emit long lists of related IDs.
             """;
 
         var payload = new
@@ -104,6 +107,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
                                 matchScore = new { type = "integer", minimum = 0, maximum = 100 },
                                 detectedLanguage = new { type = "string" },
                                 englishSummary = new { type = "string" },
+                                keyRequirements = new { type = "array", items = new { type = "string" } },
+                                candidateExpectations = new { type = "array", items = new { type = "string" } },
                                 summary = new { type = "string" },
                                 matchedRequirements = new
                                 {
@@ -143,14 +148,14 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
                             },
                             required = new[]
                             {
-                                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "summary",
-                                "matchedRequirements", "gaps", "questionsToVerify", "rationale"
+                                "recommendation", "matchScore", "detectedLanguage", "englishSummary", "keyRequirements",
+                                "candidateExpectations", "summary", "matchedRequirements", "gaps", "questionsToVerify", "rationale"
                             },
                             additionalProperties = false
                         }
                     }
                 },
-                maxOutputTokens = 1800,
+                maxOutputTokens = 4096,
                 thinkingConfig = new
                 {
                     // Job matching is a classification task; lower reasoning effort reduces latency.
@@ -187,8 +192,25 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             cancellationToken: cancellationToken);
 
         if (!responseJson.RootElement.TryGetProperty("candidates", out var candidates) ||
-            candidates.GetArrayLength() == 0 ||
-            !candidates[0].TryGetProperty("content", out var content) ||
+            candidates.ValueKind != JsonValueKind.Array ||
+            candidates.GetArrayLength() == 0)
+        {
+            throw new GeminiApiException(
+                "Gemini returned no analysable candidate response. Try again; if this continues, check the provider response and configured model.",
+                (int)HttpStatusCode.BadGateway);
+        }
+
+        var candidate = candidates[0];
+        if (candidate.TryGetProperty("finishReason", out var finishReasonElement) &&
+            finishReasonElement.ValueKind == JsonValueKind.String &&
+            string.Equals(finishReasonElement.GetString(), "MAX_TOKENS", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new GeminiApiException(
+                "Gemini reached its output-token limit before completing the job assessment. Try again; the response budget has been increased, and the output is limited to the most relevant evidence.",
+                (int)HttpStatusCode.BadGateway);
+        }
+
+        if (!candidate.TryGetProperty("content", out var content) ||
             !content.TryGetProperty("parts", out var parts) ||
             parts.GetArrayLength() == 0 ||
             !parts[0].TryGetProperty("text", out var textElement))
@@ -214,7 +236,12 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             // Keep the upstream payload private, but expose the JSON path/type mismatch
             // so local development can identify which field needs a more flexible schema.
             var path = string.IsNullOrWhiteSpace(ex.Path) ? "the response root" : ex.Path;
-            var detail = $"Gemini returned JSON that does not match the expected schema at {path}. {ex.Message}";
+            var incompleteJson = ex.Message.Contains("end of data", StringComparison.OrdinalIgnoreCase)
+                || ex.Message.Contains("end of input", StringComparison.OrdinalIgnoreCase)
+                || ex.Message.Contains("incomplete", StringComparison.OrdinalIgnoreCase);
+            var detail = incompleteJson
+                ? $"Gemini returned incomplete JSON at {path}; the response may have been truncated. Try again. If it repeats, use a shorter job description."
+                : $"Gemini returned JSON that does not match the expected schema at {path}. {ex.Message}";
             throw new GeminiApiException(detail, (int)HttpStatusCode.BadGateway);
         }
 
@@ -224,6 +251,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
         }
 
         // Treat model output as untrusted and normalise missing/null fields before using them.
+        result.KeyRequirements ??= [];
+        result.CandidateExpectations ??= [];
         result.MatchedRequirements ??= [];
         result.Gaps ??= [];
         result.QuestionsToVerify ??= [];

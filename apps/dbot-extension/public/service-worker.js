@@ -57,121 +57,89 @@ function extractJobDetailsFromPage() {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  const htmlToText = (html) => {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(String(html || ""), "text/html");
-    doc.querySelectorAll("script,style,noscript,svg,button,form").forEach(node => node.remove());
-    return cleanText(doc.body.innerText || doc.body.textContent || "");
-  };
+  // This LinkedIn layout exposes a job-specific section ID, the job URL link,
+  // and company links. Avoid hashed CSS classes and broad main/article scraping.
+  const aboutSection = document.querySelector('[id^="JobDetails_AboutTheJob_"]');
+  const aboutId = String(aboutSection?.id || "").match(/^JobDetails_AboutTheJob_(\d+)$/);
+  const url = new URL(location.href);
+  const selectedJobId = aboutId?.[1]
+    || url.searchParams.get("currentJobId")
+    || url.searchParams.get("jobPostingId")
+    || url.pathname.match(/\/jobs\/view\/(\d+)/)?.[1]
+    || "";
 
-  const unwrapTypes = (value) => {
-    if (!value || typeof value !== "object") return [];
-    const results = [];
-    const types = Array.isArray(value["@type"]) ? value["@type"] : [value["@type"]];
-    if (types.some(type => String(type || "").toLowerCase() === "jobposting")) {
-      results.push(value);
-    }
-    for (const [key, child] of Object.entries(value)) {
-      if (key === "@type") continue;
-      if (Array.isArray(child)) {
-        child.forEach(item => results.push(...unwrapTypes(item)));
-      } else if (child && typeof child === "object") {
-        results.push(...unwrapTypes(child));
-      }
-    }
-    return results;
-  };
+  const jobLinks = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
+  const jobLink = (selectedJobId
+    ? jobLinks.find(link => {
+        try {
+          return new URL(link.href, location.href).pathname.includes("/jobs/view/" + selectedJobId);
+        } catch {
+          return false;
+        }
+      })
+    : null)
+    || document.querySelector(".jobs-unified-top-card__job-title a")
+    || jobLinks[0]
+    || null;
 
-  const structuredJobs = [];
-  document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
-    try {
-      structuredJobs.push(...unwrapTypes(JSON.parse(script.textContent || "null")));
-    } catch {
-      // Ignore malformed structured data; use visible page content instead.
-    }
-  });
-
-  const structuredJob = structuredJobs.find(job =>
-    typeof job.description === "string" && job.description.trim().length >= 80
-  ) || structuredJobs[0] || null;
-
-  const companyFromStructured = structuredJob?.hiringOrganization;
-  const structuredCompany = typeof companyFromStructured === "string"
-    ? companyFromStructured
-    : companyFromStructured?.name || "";
-
-  const selectors = [
-    '[itemprop="description"]',
-    '[data-testid*="job-description" i]',
-    '[data-automation-id*="jobPostingDescription" i]',
-    '[class*="job-description" i]',
-    '[id*="job-description" i]',
-    '[class*="jobDescription" i]',
-    '[id*="jobDescription" i]',
-    '[class*="description__" i]',
-    "article",
-    "main",
-    '[role="main"]'
-  ];
-
-  const candidates = [];
-  selectors.forEach((selector, priority) => {
-    try {
-      document.querySelectorAll(selector).forEach(node => {
-        if (!(node instanceof HTMLElement)) return;
-        const clone = node.cloneNode(true);
-        if (!(clone instanceof HTMLElement)) return;
-        clone.querySelectorAll("script,style,noscript,svg,button,form,nav,footer,header,aside,[aria-hidden='true']").forEach(child => child.remove());
-        const text = cleanText(clone.innerText || clone.textContent || "");
-        if (text.length < 100) return;
-        const hasJobTerms = /responsibilit|qualification|requirement|what you('ll| will) do|what we('re| are) looking|experience|skills|your profile|about the role|job description|stellenbeschreibung|aufgaben|anforderungen|qualifikation|berufserfahrung|kenntnisse/i.test(text);
-        const lengthScore = Math.min(text.length, 14000) / 100;
-        const score = (selectors.length - priority) * 12 + lengthScore + (hasJobTerms ? 30 : 0);
-        candidates.push({ text, score });
-      });
-    } catch {
-      // Some websites use custom selector behaviour; continue with other selectors.
-    }
-  });
-
-  candidates.sort((a, b) => b.score - a.score);
-  const structuredDescription = typeof structuredJob?.description === "string"
-    ? htmlToText(structuredJob.description)
-    : "";
-  const visibleDescription = candidates.find(item => item.text.length >= 180)?.text || "";
-  const description = (structuredDescription.length >= 120 ? structuredDescription : visibleDescription)
-    .slice(0, 20000)
-    .trim();
-
-  const title = cleanText(
-    structuredJob?.title ||
-    document.querySelector('meta[property="og:title"]')?.getAttribute("content") ||
-    document.querySelector("h1")?.innerText ||
-    document.title
+  const descriptionRoot = aboutSection?.querySelector('[data-testid="expandable-text-box"]')
+    || aboutSection
+    || null;
+  let title = cleanText(
+    jobLink?.textContent
+    || descriptionRoot?.querySelector("strong")?.textContent
+    || document.querySelector(".jobs-unified-top-card__job-title")?.textContent
+    || ""
   ).slice(0, 160);
 
-  const companyElement = document.querySelector(
-    '[data-testid*="company" i], [data-automation-id*="company" i], [class*="company-name" i], [class*="employer" i], [itemprop="hiringOrganization"]'
-  );
-  const companyFromPage = cleanText(companyElement?.textContent || "").slice(0, 160);
-  const company = cleanText(structuredCompany || companyFromPage).slice(0, 160);
+  // Find the company link closest to the selected job's header, using its href
+  // pattern instead of LinkedIn's generated gfl* CSS classes.
+  let companyLink = null;
+  let header = jobLink?.parentElement || null;
+  for (let depth = 0; header && depth < 10; depth += 1, header = header.parentElement) {
+    const links = Array.from(header.querySelectorAll('a[href*="/company/"]'));
+    companyLink = links.find(link => cleanText(link.textContent || link.getAttribute("aria-label"))) || null;
+    if (companyLink) break;
+  }
+  const ariaCompany = cleanText(companyLink?.getAttribute("aria-label") || "")
+    .replace(/^Company,\s*/i, "")
+    .replace(/\.$/, "");
+  const company = cleanText(
+    companyLink?.querySelector('a[href*="/company/"]')?.textContent
+    || companyLink?.textContent
+    || ariaCompany
+  ).slice(0, 160);
 
-  const jobTextSignal = /job|career|vacancy|position|recruit|employment|stellenangebot|karriere|stelle|bewerbung/i.test(
-    [document.title, title, structuredJob?.title || "", description.slice(0, 2500)].join(" ")
-  );
-  const found = description.length >= 100 && (Boolean(structuredJob) || jobTextSignal);
+  let description = "";
+  if (descriptionRoot) {
+    const clone = descriptionRoot.cloneNode(true);
+    clone.querySelectorAll("button, script, style, noscript, svg, [data-testid='expandable-text-button']").forEach(node => node.remove());
+    description = cleanText(clone.innerText || clone.textContent || "");
+    // The first line of this LinkedIn container repeats the job title.
+    if (title && description.toLowerCase().startsWith(title.toLowerCase())) {
+      description = description.slice(title.length).trim();
+    }
+    description = description.replace(/^[\s:–—-]+/, "").trim().slice(0, 20000);
+  }
+
+  const found = description.length >= 40 && Boolean(title || company);
+  let reason = "Job details were read from LinkedIn's selected job-detail HTML.";
+  if (!aboutSection) {
+    reason = "Couldn't find LinkedIn's [id^='JobDetails_AboutTheJob_'] section. Select a job and wait for its details to load, then retry.";
+  } else if (!description || description.length < 40) {
+    reason = "Found the selected job panel, but its About the job text is missing or too short. Wait for the description to load, then retry.";
+  }
 
   return {
     found,
+    jobId: selectedJobId,
     title,
     company,
     description,
     url: location.href,
     pageTitle: cleanText(document.title).slice(0, 240),
-    reason: found
-      ? "Job details were detected from the page HTML."
-      : "A full job description was not detected. Try another job page or paste the description manually.",
-    extractionSource: structuredDescription.length >= 120 ? "JobPosting structured data" : "visible page content"
+    reason,
+    extractionSource: "LinkedIn selected job-detail DOM"
   };
 }
 
@@ -210,19 +178,160 @@ async function notifyPanel(message) {
   }
 }
 
+function processedJobKey(tabId, job) {
+  return JSON.stringify([
+    tabId,
+    job.url || "",
+    job.jobId || job.title || "",
+    (job.description || "").length,
+    (job.description || "").slice(0, 220),
+    (job.description || "").slice(-120)
+  ]);
+}
+
+// Injected in Chrome's isolated extension world. It watches only LinkedIn's
+// selected job section, identified by JobDetails_AboutTheJob_<jobId>.
+function installLinkedInJobObserver() {
+  if (!/(^|\.)linkedin\.com$/i.test(location.hostname)) {
+    return { installed: false, reason: "not-linkedin" };
+  }
+
+  const observerKey = "__dbotLinkedInJobObserverV1";
+  if (window[observerKey]) return { installed: true, alreadyInstalled: true };
+
+  const readSignature = () => {
+    const section = document.querySelector('[id^="JobDetails_AboutTheJob_"]');
+    if (!section) return "";
+    const jobId = String(section.id || "").match(/^JobDetails_AboutTheJob_(\d+)$/)?.[1] || "";
+    const descriptionNode = section.querySelector('[data-testid="expandable-text-box"]') || section;
+    const description = String(descriptionNode.innerText || descriptionNode.textContent || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\s{3,}/g, " ")
+      .trim();
+    const titleLink = jobId
+      ? Array.from(document.querySelectorAll('a[href*="/jobs/view/"]')).find(link => {
+          try {
+            return new URL(link.href, location.href).pathname.includes("/jobs/view/" + jobId);
+          } catch {
+            return false;
+          }
+        })
+      : null;
+    const title = String(titleLink?.textContent || descriptionNode.querySelector("strong")?.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!jobId && !title && description.length < 40) return "";
+    return JSON.stringify({
+      jobId,
+      title,
+      descriptionLength: description.length,
+      descriptionStart: description.slice(0, 180),
+      descriptionEnd: description.slice(-100)
+    });
+  };
+
+  let lastSignature = readSignature();
+  let debounceHandle;
+  const scheduleCheck = () => {
+    clearTimeout(debounceHandle);
+    debounceHandle = setTimeout(() => {
+      const signature = readSignature();
+      if (!signature || signature === lastSignature) return;
+      lastSignature = signature;
+      try {
+        chrome.runtime.sendMessage({
+          type: "DBOT_LINKEDIN_JOB_CHANGED",
+          signature,
+          url: location.href
+        }).catch(() => undefined);
+      } catch {
+        // The service worker may be restarting; the next DOM change will retry.
+      }
+    }, 850);
+  };
+
+  const observer = new MutationObserver(scheduleCheck);
+  observer.observe(document.documentElement || document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["id", "href"]
+  });
+  window[observerKey] = {
+    observer,
+    dispose: () => {
+      observer.disconnect();
+      clearTimeout(debounceHandle);
+    }
+  };
+  return { installed: true, alreadyInstalled: false };
+}
+
+function removeLinkedInJobObserver() {
+  const observerKey = "__dbotLinkedInJobObserverV1";
+  const state = window[observerKey];
+  if (!state) return { removed: false };
+  try {
+    state.dispose?.();
+    state.observer?.disconnect();
+  } catch {
+    // Best effort cleanup; the background setting still prevents further scans.
+  }
+  delete window[observerKey];
+  return { removed: true };
+}
+
+async function ensureLinkedInJobObserver(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: installLinkedInJobObserver
+    });
+  } catch {
+    // Some pages prohibit script injection; ordinary tab-change fetching still works.
+  }
+}
+
+async function removeObserverFromTab(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: removeLinkedInJobObserver
+    });
+  } catch {
+    // The page may have closed or access may have been revoked.
+  }
+}
+
+const pendingAutoFetchTabs = new Set();
+
 async function maybeAutoFetch(tabId, tabUrl) {
   const settings = await readSettings();
-  if (!settings.autoFetchEnabled || inProgressTabs.has(tabId)) return;
+  if (!settings.autoFetchEnabled) return;
   if (!(await hasAllSitesPermission())) return;
 
-  const url = tabUrl || (await chrome.tabs.get(tabId)).url || "";
+  if (inProgressTabs.has(tabId)) {
+    pendingAutoFetchTabs.add(tabId);
+    return;
+  }
+
+  let url = tabUrl || "";
+  try {
+    if (!url) url = (await chrome.tabs.get(tabId)).url || "";
+  } catch {
+    return;
+  }
   if (!/^https?:\/\//i.test(url)) return;
-  const key = `${tabId}:${url}`;
-  if (recentlyProcessed.get(tabId) === key) return;
 
   inProgressTabs.add(tabId);
   try {
+    await ensureLinkedInJobObserver(tabId);
     const job = await extractFromTab(tabId);
+    const key = processedJobKey(tabId, job);
+    if (recentlyProcessed.get(tabId) === key) return;
+
     recentlyProcessed.set(tabId, key);
     await notifyPanel({
       type: "DBOT_JOB_DETAILS_DETECTED",
@@ -240,6 +349,9 @@ async function maybeAutoFetch(tabId, tabUrl) {
     });
   } finally {
     inProgressTabs.delete(tabId);
+    if (pendingAutoFetchTabs.delete(tabId)) {
+      void maybeAutoFetch(tabId);
+    }
   }
 }
 
@@ -261,8 +373,16 @@ chrome.permissions.onRemoved.addListener(() => {
   void notifyPanel({ type: "DBOT_SETTINGS_CHANGED" });
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message.type !== "string") return false;
+
+  if (message.type === "DBOT_LINKEDIN_JOB_CHANGED") {
+    const tabId = sender.tab?.id;
+    if (Number.isInteger(tabId)) {
+      void maybeAutoFetch(tabId, sender.tab?.url);
+    }
+    return false;
+  }
 
   if (message.type === "DBOT_GET_SETTINGS") {
     Promise.all([readSettings(), hasAllSitesPermission()])
@@ -280,17 +400,38 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "DBOT_FETCH_CURRENT_PAGE") {
     (async () => {
-      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (!tab?.id || !tab.url || !/^https?:\/\//i.test(tab.url)) {
+      // The side panel supplies the active tab ID from its own browser window.
+      // A service worker's lastFocusedWindow query can point at a different
+      // window (or return no tab), so don't guess which page the user meant.
+      const requestedTabId = Number.isInteger(message.tabId) ? message.tabId : undefined;
+      if (requestedTabId === undefined) {
         sendResponse({
           ok: false,
-          error: "Open a normal http/https job webpage before fetching details."
+          error: "DBot could not identify the active tab. Close and reopen the side panel, then try fetching again."
+        });
+        return;
+      }
+
+      const tab = await chrome.tabs.get(requestedTabId);
+      if (tab.id === undefined) {
+        sendResponse({
+          ok: false,
+          error: "DBot could not access the selected browser tab. Please retry from the job page."
         });
         return;
       }
       try {
+        // Don't reject the tab just because Chrome omitted tab.url from metadata.
+        // Read location.href from the page itself after script injection.
         const job = await extractFromTab(tab.id);
-        recentlyProcessed.set(tab.id, `${tab.id}:${tab.url}`);
+        if (typeof job.url !== "string" || !/^https?:\/\//i.test(job.url)) {
+          sendResponse({
+            ok: false,
+            error: "Open a normal http/https job webpage before fetching details."
+          });
+          return;
+        }
+        recentlyProcessed.set(tab.id, processedJobKey(tab.id, job));
         sendResponse({ ok: true, tabId: tab.id, job, source: "manual" });
       } catch (error) {
         sendResponse({
@@ -315,6 +456,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         dbotAutoFetchEnabled: autoFetchEnabled,
         dbotAutoAnalyzeEnabled: autoAnalyzeEnabled
       });
+      if (autoFetchEnabled && Number.isInteger(message.tabId)) {
+        await ensureLinkedInJobObserver(message.tabId);
+      } else if (!autoFetchEnabled) {
+        try {
+          const linkedinTabs = await chrome.tabs.query({ url: ["https://*.linkedin.com/*"] });
+          await Promise.all(
+            linkedinTabs
+              .filter(tab => Number.isInteger(tab.id))
+              .map(tab => removeObserverFromTab(tab.id))
+          );
+        } catch {
+          // Automatic fetch is disabled in storage even if observer cleanup is unavailable.
+        }
+      }
       sendResponse({ ok: true, settings: { autoFetchEnabled, autoAnalyzeEnabled } });
     })().catch(error => sendResponse({
       ok: false,
