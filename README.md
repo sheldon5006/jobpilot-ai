@@ -7,7 +7,8 @@ JobPilot AI is a personal job-search assistant built around **DBot**, a Chrome e
 - Translate job descriptions when needed.
 - Compare a vacancy with a verified candidate profile.
 - Return an explainable recommendation: **Apply**, **Review**, or **Skip**.
-- Prepare role-specific CVs using only verified candidate information.
+- Keep a career profile and timeline as the source of truth for job analysis.
+- Attach the exact PDF/DOCX CV used for each application; automatic CV generation is still planned.
 - Track evaluated jobs, generated CV versions, application status, and follow-ups.
 
 ## Monorepo layout
@@ -32,7 +33,9 @@ Folders are introduced incrementally so each milestone can be run and verified l
 2. The ASP.NET Core API reads the configured candidate profile and calls Gemini or Ollama.
 3. Each successful analysis is saved to a local SQLite database by default.
 4. The dashboard lists saved jobs and recommendations, and lets you update application status and notes.
-5. PostgreSQL can be configured for hosted deployment.
+5. My Profile presents an editable career storyboard; changes are persisted and used by future analyses.
+6. Attach, download, or remove the CV file used for an individual saved job.
+7. PostgreSQL can be configured for hosted deployment.
 
 See [the API setup guide](services/api/README.md), [the extension setup guide](apps/dbot-extension/README.md), and [the dashboard guide](apps/dashboard/README.md).
 
@@ -46,7 +49,7 @@ See [the API setup guide](services/api/README.md), [the extension setup guide](a
 
 ## Privacy and cost
 
-Gemini API free-tier limits apply. Google states that content sent through its free tier may be used to improve its products. The API sends the job description and the locally configured candidate profile to Gemini when analysis is requested. Keep unnecessary personal identifiers out of the candidate profile. No paid-provider fallback is configured.
+Gemini API free-tier limits apply. Google states that content sent through its free tier may be used to improve its products. The API sends the job description and the saved candidate profile to Gemini when analysis is requested. Uploaded CV files are stored in the configured database and are not sent to Gemini by the current analysis endpoint. Keep unnecessary personal identifiers out of the candidate profile. No paid-provider fallback is configured.
 
 ## Responsible use
 
