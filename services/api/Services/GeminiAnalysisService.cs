@@ -92,7 +92,8 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
                 {
                     text = new
                     {
-                        mimeType = "application/json",
+                        // The current responseFormat REST field is an enum; use its enum token, not the MIME label.
+                        mimeType = "APPLICATION_JSON",
                         schema = new
                         {
                             type = "object",
