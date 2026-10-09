@@ -17,6 +17,8 @@ public sealed class JobAnalysisResult
     public int MatchScore { get; set; }
     public string DetectedLanguage { get; set; } = "Unknown";
     public string EnglishSummary { get; set; } = string.Empty;
+    public List<string> KeyRequirements { get; set; } = [];
+    public List<string> CandidateExpectations { get; set; } = [];
     public string Summary { get; set; } = string.Empty;
     public List<MatchedRequirement> MatchedRequirements { get; set; } = [];
     public List<RequirementGap> Gaps { get; set; } = [];
