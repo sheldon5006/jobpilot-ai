@@ -342,7 +342,7 @@ public static class JobRequirementRuleEngine
                 profile,
                 authorizationRequirement,
                 "work_authorization",
-                fact => profileStatus.StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)));
+                fact => string.Equals(ProfileEvidenceCatalog.CleanFactText(profileStatus), fact.Text, StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 "The candidate profile states work eligibility consistent with the vacancy's stated sponsorship condition.");
             result.Rationale = AppendText(result.Rationale,
@@ -624,7 +624,7 @@ public static class JobRequirementRuleEngine
             var summary = profile.ProfessionalSummary?.Trim() ?? string.Empty;
             facts = SummaryExperienceAmount.IsMatch(summary)
                 ? catalog.Where(fact => fact.Category == "professional_summary" &&
-                                        summary.StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)).ToList()
+                                        string.Equals(ProfileEvidenceCatalog.CleanFactText(summary), fact.Text, StringComparison.OrdinalIgnoreCase)).ToList()
                 : [];
         }
 
@@ -718,7 +718,7 @@ public static class JobRequirementRuleEngine
                     profile,
                     credentialLabel,
                     "certification",
-                    fact => evidence.Trim().StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)));
+                    fact => string.Equals(ProfileEvidenceCatalog.CleanFactText(evidence.Trim()), fact.Text, StringComparison.OrdinalIgnoreCase)));
                 continue;
             }
 
@@ -800,7 +800,7 @@ public static class JobRequirementRuleEngine
                 profile,
                 label,
                 "education",
-                fact => educationEvidence.Trim().StartsWith(fact.Text, StringComparison.OrdinalIgnoreCase)));
+                fact => string.Equals(ProfileEvidenceCatalog.CleanFactText(educationEvidence.Trim()), fact.Text, StringComparison.OrdinalIgnoreCase)));
             result.Summary = AppendText(result.Summary,
                 "Current university study/enrolment is supported by the candidate profile.");
             result.Rationale = AppendText(result.Rationale,
