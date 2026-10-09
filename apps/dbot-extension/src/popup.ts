@@ -299,7 +299,7 @@ async function analyzeCurrentJob(): Promise<void> {
 
 async function requestSettings(): Promise<void> {
   try {
-    const response = await chrome.runtime.sendMessage({ type: "DBOT_GET_SETTINGS" }) as Promise<SettingsResponse>;
+    const response = (await chrome.runtime.sendMessage({ type: "DBOT_GET_SETTINGS" })) as SettingsResponse;
     if (!response?.ok || !response.settings) {
       throw new Error(response?.error || "Could not load settings.");
     }
@@ -308,7 +308,7 @@ async function requestSettings(): Promise<void> {
     autoAnalyzeToggle.checked = settings.autoAnalyzeEnabled;
     autoAnalyzeToggle.disabled = !settings.autoFetchEnabled;
     if (settings.autoFetchEnabled && response.allSitesPermission) {
-      const result = await chrome.runtime.sendMessage({ type: "DBOT_FETCH_CURRENT_PAGE" }) as Promise<FetchResponse>;
+      const result = (await chrome.runtime.sendMessage({ type: "DBOT_FETCH_CURRENT_PAGE" })) as FetchResponse;
       if (result?.ok && result.job) {
         await applyDetectedJob(result.job, settings.autoAnalyzeEnabled, "auto");
       } else if (result?.error) {
@@ -325,7 +325,7 @@ async function fetchCurrentPage(): Promise<void> {
   fetchPageButton.textContent = "Reading page HTML…";
   setPageStatus("Looking for structured job data and visible job-description content…", "info");
   try {
-    const response = await chrome.runtime.sendMessage<FetchResponse>({ type: "DBOT_FETCH_CURRENT_PAGE" });
+    const response = (await chrome.runtime.sendMessage({ type: "DBOT_FETCH_CURRENT_PAGE" })) as FetchResponse;
     if (!response?.ok || !response.job) {
       throw new Error(response?.error || "Could not fetch the current page.");
     }
@@ -398,11 +398,11 @@ async function updateAutoFetchSetting(enabled: boolean): Promise<void> {
   }
 
   const requestedAnalyze = enabled && autoAnalyzeToggle.checked;
-  const response = await chrome.runtime.sendMessage({
+  const response = (await chrome.runtime.sendMessage({
     type: "DBOT_SET_SETTINGS",
     autoFetchEnabled: enabled,
     autoAnalyzeEnabled: requestedAnalyze
-  }) as Promise<SettingsResponse>;
+  })) as SettingsResponse;
   if (!response?.ok || !response.settings) {
     throw new Error(response?.error || "Could not save the automatic fetching setting.");
   }
@@ -453,11 +453,11 @@ autoAnalyzeToggle.addEventListener("change", async () => {
     return;
   }
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = (await chrome.runtime.sendMessage({
       type: "DBOT_SET_SETTINGS",
       autoFetchEnabled: true,
       autoAnalyzeEnabled: autoAnalyzeToggle.checked
-    }) as Promise<SettingsResponse>;
+    })) as SettingsResponse;
     if (!response?.ok || !response.settings) throw new Error(response?.error || "Could not save auto-analysis setting.");
     settings = response.settings;
     autoAnalyzeToggle.checked = settings.autoAnalyzeEnabled;
