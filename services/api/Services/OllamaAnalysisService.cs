@@ -197,6 +197,7 @@ public sealed class OllamaAnalysisService(HttpClient httpClient, IConfiguration 
         // Reconcile model output with requirements explicitly stated in the vacancy first,
         // so deterministic eligibility rules can replace irrelevant model-generated entries.
         JobRequirementRuleEngine.Apply(request, profile, result);
+        VacancyRequirementValidator.Apply(request, result);
 
         // Validate the remaining matches, including deterministic matches, against profile facts.
         ProfileEvidenceValidator.Apply(profile, result);
