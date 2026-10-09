@@ -98,7 +98,12 @@ public sealed class GeminiAnalysisService(HttpClient httpClient, IConfiguration 
             generationConfig = new
             {
                 responseMimeType = "application/json",
-                maxOutputTokens = 1800
+                maxOutputTokens = 1800,
+                thinkingConfig = new
+                {
+                    // Job matching is a classification task; lower reasoning effort reduces latency.
+                    thinkingLevel = "LOW"
+                }
             }
         };
 
