@@ -206,7 +206,7 @@ static async Task<IResult> AnalyzeJobAsync(
 
         return Results.Problem(
             title: useOllama ? "Local Ollama service could not be reached" : "Gemini could not be reached",
-            detail,
+            detail: detail,
             statusCode: StatusCodes.Status502BadGateway);
     }
     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
