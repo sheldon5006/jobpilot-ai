@@ -46,7 +46,7 @@ function Get-NormalizedTokens {
 
     $tokens = [regex]::Matches($Text.ToLowerInvariant(), '[a-z0-9+#.]+')
     $normalized = foreach ($item in $tokens) {
-        $token = $item.Value
+        $token = $item.Value.Trim('.')
 
         if ($token -eq "proficiency" -or $token -eq "proficient") {
             $token = "language"
