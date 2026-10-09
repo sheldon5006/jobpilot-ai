@@ -100,6 +100,39 @@ public sealed class EvidenceAndEligibilityTests
     }
 
     [Fact]
+    public void RealEducationClauseSurvivesFollowingPlaceholderInstructions()
+    {
+        var profile = new CandidateProfile
+        {
+            Education = ["M.Sc. Artificial Intelligence — in progress; replace institution and expected completion details as needed."]
+        };
+
+        var facts = ProfileEvidenceCatalog.Create(profile);
+        var educationFact = Assert.Single(facts.Where(fact => fact.Category == "education"));
+
+        Assert.Equal("M.Sc. Artificial Intelligence — in progress", educationFact.Text);
+    }
+
+    [Fact]
+    public void ReplacedLegacyApplicationsAreNotMistakenForPlaceholders()
+    {
+        var profile = new CandidateProfile
+        {
+            Experience =
+            [
+                new ExperienceEntry
+                {
+                    Role = "Software Engineer",
+                    Evidence = ["Replaced legacy VB applications with ASP.NET Core and Angular."]
+                }
+            ]
+        };
+
+        var facts = ProfileEvidenceCatalog.Create(profile);
+        Assert.Contains(facts, fact => fact.Text.StartsWith("Replaced legacy", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void EvidenceTextIsRenderedFromTheCitedProfileFact()
     {
         const string fact = "Designed and integrated REST APIs with Entity Framework and SQL Server.";
