@@ -7,6 +7,7 @@ public sealed class JobPilotDbContext(DbContextOptions<JobPilotDbContext> option
     : DbContext(options)
 {
     public DbSet<SavedJob> SavedJobs => Set<SavedJob>();
+    public DbSet<JobCvAttachment> JobCvAttachments => Set<JobCvAttachment>();
     public DbSet<CandidateProfileDocument> CandidateProfiles => Set<CandidateProfileDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -22,10 +23,19 @@ public sealed class JobPilotDbContext(DbContextOptions<JobPilotDbContext> option
         job.Property(item => item.DetectedLanguage).HasMaxLength(80);
         job.Property(item => item.AnalysisJson).IsRequired();
         job.Property(item => item.JobDescription).IsRequired();
-        job.Property(item => item.CvFileName).HasMaxLength(255);
-        job.Property(item => item.CvContentType).HasMaxLength(160);
         job.HasIndex(item => item.CreatedAtUtc);
         job.HasIndex(item => item.ApplicationStatus);
+        job.HasOne(item => item.CvAttachment)
+            .WithOne(attachment => attachment.Job)
+            .HasForeignKey<JobCvAttachment>(attachment => attachment.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var cv = modelBuilder.Entity<JobCvAttachment>();
+        cv.ToTable("JobCvAttachments");
+        cv.HasKey(item => item.JobId);
+        cv.Property(item => item.FileName).HasMaxLength(255).IsRequired();
+        cv.Property(item => item.ContentType).HasMaxLength(160).IsRequired();
+        cv.Property(item => item.Bytes).IsRequired();
 
         var profile = modelBuilder.Entity<CandidateProfileDocument>();
         profile.ToTable("CandidateProfiles");
