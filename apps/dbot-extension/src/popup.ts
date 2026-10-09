@@ -1,6 +1,7 @@
 interface MatchedRequirement {
   requirement: string;
   evidence: string;
+  evidenceIds: string[];
 }
 
 interface RequirementGap {
@@ -19,6 +20,8 @@ interface JobAnalysisResult {
   gaps: RequirementGap[];
   questionsToVerify: string[];
   rationale: string;
+  mandatoryRequirementsStatus: string;
+  evidenceValidationWarnings: string[];
   requiresHumanReview: boolean;
   note: string;
 }
@@ -52,6 +55,9 @@ const recommendationPill = element<HTMLElement>("#recommendation-pill");
 const matchScore = element<HTMLElement>("#match-score");
 const englishSummary = element<HTMLElement>("#english-summary");
 const resultCopy = element<HTMLElement>("#result-copy");
+const mandatoryStatus = element<HTMLElement>("#mandatory-status");
+const evidenceWarningSection = element<HTMLElement>("#evidence-warning-section");
+const evidenceWarningsList = element<HTMLUListElement>("#evidence-warnings-list");
 const resultMeta = element<HTMLElement>("#result-meta");
 const matchesList = element<HTMLUListElement>("#matches-list");
 const gapsList = element<HTMLUListElement>("#gaps-list");
@@ -77,8 +83,14 @@ function renderMatches(items: MatchedRequirement[]): void {
     const heading = document.createElement("strong");
     const evidence = document.createElement("p");
     heading.textContent = item.requirement || "Requirement";
-    evidence.textContent = item.evidence || "No supporting evidence supplied.";
+    evidence.textContent = item.evidence || "No supporting profile fact supplied.";
     listItem.append(heading, evidence);
+    if (Array.isArray(item.evidenceIds) && item.evidenceIds.length > 0) {
+      const sources = document.createElement("p");
+      sources.className = "evidence-source";
+      sources.textContent = `Verified profile facts: ${item.evidenceIds.join(", ")}`;
+      listItem.append(sources);
+    }
     matchesList.append(listItem);
   }
 }
@@ -144,6 +156,10 @@ function renderAnalysis(result: JobAnalysisResult): void {
   matchScore.textContent = `${Math.max(0, Math.min(100, Math.round(result.matchScore || 0)))} / 100`;
   englishSummary.textContent = result.englishSummary || "No English summary was returned.";
   resultCopy.textContent = [result.summary, result.rationale].filter(Boolean).join(" ");
+  mandatoryStatus.textContent = result.mandatoryRequirementsStatus || "Unknown";
+  const warnings = Array.isArray(result.evidenceValidationWarnings) ? result.evidenceValidationWarnings : [];
+  evidenceWarningSection.hidden = warnings.length === 0;
+  renderStrings(evidenceWarningsList, warnings, "No evidence warnings.");
   resultMeta.textContent = [
     jobTitleInput.value.trim() || "Untitled role",
     companyInput.value.trim() || "Company not specified",
@@ -172,6 +188,9 @@ function renderError(message: string): void {
   matchScore.textContent = "--";
   englishSummary.textContent = "No recommendation was produced.";
   resultCopy.textContent = message;
+  mandatoryStatus.textContent = "Unknown — analysis not completed.";
+  evidenceWarningSection.hidden = true;
+  showEmptyList(evidenceWarningsList, "Not available.");
   resultMeta.textContent = "Check the API setup, candidate profile and free-tier quota, then try again.";
   showEmptyList(matchesList, "Not available.");
   showEmptyList(gapsList, "Not available.");
