@@ -96,7 +96,7 @@ Available endpoints:
 
 - `GET /api/jobs` — list saved jobs, newest updated first.
 - `GET /api/jobs/{id}` — get the saved job, original description, notes, and full analysis.
-- `PUT /api/jobs/{id}` — update `applicationStatus` and `notes`. Allowed statuses: `Saved`, `Applied`, `Interview`, `Rejected`, `Offer`.
+- `PUT /api/jobs/{id}` — update `applicationStatus` and `notes`. Allowed statuses: `Saved`, `Attempt`, `Applied`, `Interview`, `Rejected`, `Offer`.
 - `POST /api/jobs/analyze` — analyze and save a job.
 
 To run the dashboard, keep the API running in one terminal. In a second terminal from the repository root:
@@ -136,6 +136,10 @@ Invoke-RestMethod http://127.0.0.1:5080/api/health
 - `GET /api/jobs`, `GET /api/jobs/{id}`, and `PUT /api/jobs/{id}` — saved job history and tracker.
 - `POST /api/jobs/analyze` — analyses a supplied job description against the saved candidate profile and saves the result.
 - `POST /api/jobs/{id}/cv`, `GET /api/jobs/{id}/cv`, `DELETE /api/jobs/{id}/cv` — upload, download, or remove the CV associated with one saved job.
+- `POST /api/jobs/{id}/generated-cv` — generate a tailored CV for a saved job (body: `{ "customInstructions": "…" }`). Moves a `Saved` job to `Attempt`.
+- `GET`, `PUT`, `DELETE /api/jobs/{id}/generated-cv` — read, save manual edits to, or delete the generated CV; `GET /api/jobs/{id}/generated-cv/docx` downloads it as Word.
+- `GET /api/cv/default-instructions` — the default, user-editable CV style instructions.
+- `POST /api/assistant/answer` — draft an answer to an application-form question (`question`, optional `jobId`/job fields, `length`: short, medium or long, `customInstructions`).
 
 Example request:
 

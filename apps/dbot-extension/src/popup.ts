@@ -1,4 +1,10 @@
+import { initAskTab, refreshAskJobContext } from "./ask-tab";
+import { initCvBuilder, resetCvBuilder } from "./cv-builder";
+import { loadProfileTab } from "./profile-tab";
+import { API_BASE_URL, element } from "./shared";
+
 interface JobAnalysisResult {
+  jobId?: string | null;
   recommendation: "Apply" | "Review" | "Skip" | string;
   matchScore: number;
   englishSummary?: string;
@@ -45,7 +51,6 @@ interface FetchResponse {
   source?: "manual";
 }
 
-const API_BASE_URL = "http://127.0.0.1:5080";
 const ALL_HTTP_ORIGINS = ["http://*/*", "https://*/*"];
 const autoAnalyzedUrls = new Set<string>();
 const autoAnalysisCacheReady: Promise<void> = chrome.storage.session
@@ -61,13 +66,9 @@ const autoAnalysisCacheReady: Promise<void> = chrome.storage.session
   });
 let settings: DbotSettings = { autoFetchEnabled: false, autoAnalyzeEnabled: false };
 
-function element<T extends HTMLElement>(selector: string): T {
-  const found = document.querySelector<T>(selector);
-  if (!found) {
-    throw new Error(`DBot could not initialise: missing element ${selector}`);
-  }
-  return found;
-}
+// The saved-job ID for the most recent analysis, and the form contents it was made from.
+let savedJobId: string | null = null;
+let savedJobSignature = "";
 
 const form = element<HTMLFormElement>("#job-form");
 const jobTitleInput = element<HTMLInputElement>("#job-title");
@@ -295,21 +296,32 @@ function renderError(message: string): void {
   resultPanel.hidden = false;
 }
 
-async function analyzeCurrentJob(): Promise<void> {
+function currentJobSignature(): string {
+  return [jobTitleInput.value.trim(), companyInput.value.trim(), descriptionInput.value.trim()].join("\u0000");
+}
+
+/** Returns the saved job ID for the form contents, analysing (and saving) the job first if needed. */
+async function ensureSavedJob(): Promise<string | null> {
+  if (savedJobId && savedJobSignature === currentJobSignature()) return savedJobId;
+  return analyzeCurrentJob();
+}
+
+async function analyzeCurrentJob(): Promise<string | null> {
   const description = descriptionInput.value.trim();
   if (description.length < 40) {
     descriptionInput.setCustomValidity("Please paste at least 40 characters from the job description.");
     descriptionInput.reportValidity();
     setPageStatus("The detected description is too short. Review it or paste the complete job description.", "error");
-    return;
+    return null;
   }
   descriptionInput.setCustomValidity("");
 
-  if (analyzeButton.disabled) return;
+  if (analyzeButton.disabled) return null;
   analyzeButton.disabled = true;
   analyzeButton.setAttribute("aria-busy", "true");
-  buttonLabel.textContent = "Analysing with Gemini…";
+  buttonLabel.textContent = "Analysing job…";
   resultPanel.hidden = true;
+  const signature = currentJobSignature();
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/jobs/analyze`, {
@@ -326,8 +338,13 @@ async function analyzeCurrentJob(): Promise<void> {
       const problem = (payload ?? {}) as ApiProblem;
       throw new Error(problem.detail || problem.title || `Local API returned HTTP ${response.status}.`);
     }
-    renderAnalysis(payload as JobAnalysisResult);
+    const result = payload as JobAnalysisResult;
+    renderAnalysis(result);
     setPageStatus("Analysis complete. Review the recommendation and evidence below.", "success");
+    if (result.jobId && result.jobId !== savedJobId) resetCvBuilder();
+    savedJobId = result.jobId ?? null;
+    savedJobSignature = signature;
+    return savedJobId;
   } catch (error) {
     const message = error instanceof Error ? error.message : "An unexpected error occurred.";
     if (message.toLowerCase().includes("failed to fetch")) {
@@ -335,6 +352,7 @@ async function analyzeCurrentJob(): Promise<void> {
     } else {
       renderError(message);
     }
+    return null;
   } finally {
     analyzeButton.disabled = false;
     analyzeButton.removeAttribute("aria-busy");
@@ -411,10 +429,12 @@ async function applyDetectedJob(
     return;
   }
 
+  const isDifferentJob = descriptionInput.value.trim() !== job.description.trim();
   jobTitleInput.value = job.title || job.pageTitle || jobTitleInput.value;
   companyInput.value = job.company || companyInput.value;
   descriptionInput.value = job.description;
   descriptionInput.setCustomValidity("");
+  if (isDifferentJob) resetCvBuilder();
 
   let displayHost = job.url;
   try {
@@ -576,5 +596,36 @@ togglePageToolsButton.addEventListener("click", () => {
     setPageStatus("Could not save the current-page visibility preference.", "error");
   });
 });
+
+const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab-button"));
+
+function currentAskContext() {
+  const upToDate = savedJobSignature === currentJobSignature();
+  return {
+    jobId: upToDate ? savedJobId : null,
+    jobTitle: jobTitleInput.value.trim(),
+    company: companyInput.value.trim(),
+    jobDescription: descriptionInput.value.trim()
+  };
+}
+
+function showTab(tab: string): void {
+  for (const button of tabButtons) {
+    const active = button.dataset.tab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    const panel = document.getElementById(button.getAttribute("aria-controls") || "");
+    if (panel) panel.hidden = !active;
+  }
+  if (tab === "profile") void loadProfileTab();
+  if (tab === "ask") refreshAskJobContext(currentAskContext());
+}
+
+for (const button of tabButtons) {
+  button.addEventListener("click", () => showTab(button.dataset.tab || "job"));
+}
+
+initCvBuilder({ ensureSavedJob });
+initAskTab(currentAskContext);
 
 void requestSettings();

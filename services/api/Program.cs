@@ -66,6 +66,7 @@ builder.Services.AddCors(options =>
                        StringComparison.OrdinalIgnoreCase);
         })
         .AllowAnyHeader()
+        .WithExposedHeaders("Content-Disposition")
         .AllowAnyMethod());
 });
 
@@ -81,6 +82,21 @@ builder.Services.AddHttpClient<OllamaAnalysisService>((services, client) =>
     client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(120);
 });
+
+builder.Services.AddHttpClient(ApplicationWritingService.GeminiClientName, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+
+builder.Services.AddHttpClient(ApplicationWritingService.OllamaClientName, (services, client) =>
+{
+    var configuration = services.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["Ollama:BaseUrl"] ?? "http://127.0.0.1:11434";
+    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(240);
+});
+
+builder.Services.AddScoped<ApplicationWritingService>();
 
 var app = builder.Build();
 
@@ -178,6 +194,7 @@ app.MapGet("/api/jobs", async (JobPilotDbContext database, CancellationToken can
             job.ApplicationStatus,
             job.CvAttachment != null,
             job.CvAttachment == null ? null : job.CvAttachment.FileName,
+            job.GeneratedCv != null,
             job.CreatedAtUtc,
             job.UpdatedAtUtc))
         .ToListAsync(cancellationToken);
@@ -226,6 +243,11 @@ app.MapGet("/api/jobs/{id:guid}", async (
         .Select(attachment => new { attachment.FileName, attachment.UploadedAtUtc, attachment.SizeBytes })
         .FirstOrDefaultAsync(cancellationToken);
 
+    var generatedCvUpdatedAt = await database.GeneratedCvs.AsNoTracking()
+        .Where(generated => generated.JobId == id)
+        .Select(generated => (DateTime?)generated.UpdatedAtUtc)
+        .FirstOrDefaultAsync(cancellationToken);
+
     return Results.Ok(new SavedJobDetails(
         job.Id,
         job.JobTitle,
@@ -236,6 +258,7 @@ app.MapGet("/api/jobs/{id:guid}", async (
         cvMetadata?.FileName,
         cvMetadata?.UploadedAtUtc,
         cvMetadata?.SizeBytes,
+        generatedCvUpdatedAt,
         job.CreatedAtUtc,
         job.UpdatedAtUtc,
         analysis));
@@ -247,7 +270,7 @@ app.MapPut("/api/jobs/{id:guid}", async (
     JobPilotDbContext database,
     CancellationToken cancellationToken) =>
 {
-    var allowedStatuses = new[] { "Saved", "Applied", "Interview", "Rejected", "Offer" };
+    var allowedStatuses = ApplicationStatuses.All;
     var requestedStatus = request.ApplicationStatus?.Trim();
 
     if (string.IsNullOrWhiteSpace(requestedStatus) ||
@@ -255,7 +278,7 @@ app.MapPut("/api/jobs/{id:guid}", async (
     {
         return Results.ValidationProblem(new Dictionary<string, string[]>
         {
-            ["applicationStatus"] = ["Choose Saved, Applied, Interview, Rejected, or Offer."]
+            ["applicationStatus"] = ["Choose Saved, Attempt, Applied, Interview, Rejected, or Offer."]
         });
     }
 
@@ -436,7 +459,371 @@ app.MapDelete("/api/jobs/{id:guid}/cv", async (
 
 app.MapPost("/api/jobs/analyze", AnalyzeJobAsync);
 
+app.MapGet("/api/cv/default-instructions", () => Results.Ok(new
+{
+    instructions = ApplicationWritingService.DefaultCvInstructions
+}));
+
+app.MapPost("/api/jobs/{id:guid}/generated-cv", async (
+    Guid id,
+    GenerateCvRequest request,
+    ApplicationWritingService writer,
+    JobPilotDbContext database,
+    IConfiguration configuration,
+    CancellationToken cancellationToken) =>
+{
+    var customInstructions = request.CustomInstructions?.Trim() ?? string.Empty;
+    if (customInstructions.Length > 4000)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["customInstructions"] = ["CV instructions must be 4,000 characters or fewer."]
+        });
+    }
+
+    var job = await database.SavedJobs.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+    if (job is null)
+    {
+        return Results.NotFound(new { title = "Saved job not found.", detail = "Analyse the job first, then generate a CV." });
+    }
+
+    var (profile, profileProblem) = await LoadCompleteProfileAsync(database, cancellationToken);
+    if (profileProblem is not null)
+    {
+        return profileProblem;
+    }
+
+    var providerProblem = ValidateAiProvider(configuration);
+    if (providerProblem is not null)
+    {
+        return providerProblem;
+    }
+
+    return await RunAiAsync(writer.UsesOllama, cancellationToken, async () =>
+    {
+        var cv = await writer.GenerateCvAsync(job, profile!, customInstructions, cancellationToken);
+
+        var generated = await database.GeneratedCvs.FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+        if (generated is null)
+        {
+            generated = new GeneratedCv { JobId = id, CreatedAtUtc = DateTime.UtcNow };
+            database.GeneratedCvs.Add(generated);
+        }
+
+        generated.CvJson = JsonSerializer.Serialize(cv, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        generated.CustomInstructions = customInstructions;
+        generated.UpdatedAtUtc = DateTime.UtcNow;
+
+        // Generating a tailored CV means the user plans to apply. Never move a job backwards.
+        if (job.ApplicationStatus == ApplicationStatuses.Saved)
+        {
+            job.ApplicationStatus = ApplicationStatuses.Attempt;
+        }
+
+        job.UpdatedAtUtc = DateTime.UtcNow;
+        await database.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(ToGeneratedCvResponse(job, generated, profile!, cv));
+    });
+});
+
+app.MapGet("/api/jobs/{id:guid}/generated-cv", async (
+    Guid id,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    var generated = await database.GeneratedCvs.AsNoTracking()
+        .Include(item => item.Job)
+        .FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+    if (generated is null)
+    {
+        return Results.NotFound(new { title = "No CV has been generated for this job." });
+    }
+
+    var (profile, _) = await LoadCompleteProfileAsync(database, cancellationToken);
+    var cv = DeserializeCv(generated.CvJson);
+    return Results.Ok(ToGeneratedCvResponse(generated.Job, generated, profile ?? new CandidateProfile(), cv));
+});
+
+app.MapPut("/api/jobs/{id:guid}/generated-cv", async (
+    Guid id,
+    UpdateGeneratedCvRequest request,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    if (request.Cv is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["cv"] = ["Send the edited CV."]
+        });
+    }
+
+    var generated = await database.GeneratedCvs
+        .Include(item => item.Job)
+        .FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+    if (generated is null)
+    {
+        return Results.NotFound(new { title = "No CV has been generated for this job." });
+    }
+
+    var cv = CvSanitizer.NormalizeUserEdit(request.Cv);
+    generated.CvJson = JsonSerializer.Serialize(cv, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    generated.UpdatedAtUtc = DateTime.UtcNow;
+    generated.Job.UpdatedAtUtc = DateTime.UtcNow;
+    await database.SaveChangesAsync(cancellationToken);
+
+    var (profile, _) = await LoadCompleteProfileAsync(database, cancellationToken);
+    return Results.Ok(ToGeneratedCvResponse(generated.Job, generated, profile ?? new CandidateProfile(), cv));
+});
+
+app.MapDelete("/api/jobs/{id:guid}/generated-cv", async (
+    Guid id,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    var generated = await database.GeneratedCvs.FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+    if (generated is null)
+    {
+        return Results.NotFound(new { title = "No CV has been generated for this job." });
+    }
+
+    database.GeneratedCvs.Remove(generated);
+    await database.SaveChangesAsync(cancellationToken);
+    return Results.NoContent();
+});
+
+app.MapGet("/api/jobs/{id:guid}/generated-cv/docx", async (
+    Guid id,
+    JobPilotDbContext database,
+    CancellationToken cancellationToken) =>
+{
+    var generated = await database.GeneratedCvs.AsNoTracking()
+        .Include(item => item.Job)
+        .FirstOrDefaultAsync(item => item.JobId == id, cancellationToken);
+    if (generated is null)
+    {
+        return Results.NotFound(new { title = "No CV has been generated for this job." });
+    }
+
+    var (profile, _) = await LoadCompleteProfileAsync(database, cancellationToken);
+    var contact = profile?.Contact ?? new ContactDetails();
+    var bytes = CvDocxBuilder.Build(contact, DeserializeCv(generated.CvJson));
+    return Results.File(
+        bytes,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        BuildCvFileName(contact.FullName, generated.Job.Company, generated.Job.JobTitle));
+});
+
+app.MapPost("/api/assistant/answer", async (
+    AnswerQuestionRequest request,
+    ApplicationWritingService writer,
+    JobPilotDbContext database,
+    IConfiguration configuration,
+    CancellationToken cancellationToken) =>
+{
+    var question = request.Question?.Trim() ?? string.Empty;
+    if (question.Length < 5 || question.Length > 2000)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["question"] = ["Paste a question between 5 and 2,000 characters."]
+        });
+    }
+
+    if ((request.CustomInstructions?.Length ?? 0) > 2000 ||
+        (request.JobDescription?.Length ?? 0) > 20_000 ||
+        (request.JobTitle?.Length ?? 0) > 160 ||
+        (request.Company?.Length ?? 0) > 160)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["request"] = ["Instructions must be 2,000 characters or fewer, the job description 20,000 or fewer, and title/company 160 or fewer."]
+        });
+    }
+
+    var (profile, profileProblem) = await LoadCompleteProfileAsync(database, cancellationToken);
+    if (profileProblem is not null)
+    {
+        return profileProblem;
+    }
+
+    var providerProblem = ValidateAiProvider(configuration);
+    if (providerProblem is not null)
+    {
+        return providerProblem;
+    }
+
+    var jobTitle = request.JobTitle;
+    var company = request.Company;
+    var jobDescription = request.JobDescription;
+    if (request.JobId is Guid jobId)
+    {
+        var job = await database.SavedJobs.AsNoTracking().FirstOrDefaultAsync(item => item.Id == jobId, cancellationToken);
+        if (job is not null)
+        {
+            jobTitle = string.IsNullOrWhiteSpace(jobTitle) ? job.JobTitle : jobTitle;
+            company = string.IsNullOrWhiteSpace(company) ? job.Company : company;
+            jobDescription = string.IsNullOrWhiteSpace(jobDescription) ? job.JobDescription : jobDescription;
+        }
+    }
+
+    return await RunAiAsync(writer.UsesOllama, cancellationToken, async () =>
+    {
+        var answer = await writer.AnswerQuestionAsync(
+            question, profile!, jobTitle, company, jobDescription, request.CustomInstructions, request.Length, cancellationToken);
+        return Results.Ok(new AnswerQuestionResponse(question, answer));
+    });
+});
+
 app.Run();
+
+static async Task<(CandidateProfile? Profile, IResult? Problem)> LoadCompleteProfileAsync(
+    JobPilotDbContext database,
+    CancellationToken cancellationToken)
+{
+    var document = await database.CandidateProfiles.AsNoTracking()
+        .FirstOrDefaultAsync(item => item.Id == "primary", cancellationToken);
+
+    CandidateProfile? profile;
+    try
+    {
+        profile = document is null
+            ? null
+            : JsonSerializer.Deserialize<CandidateProfile>(
+                document.ProfileJson,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    }
+    catch (JsonException)
+    {
+        return (null, Results.Problem(
+            title: "Saved candidate profile could not be read",
+            detail: "Open My Profile and save the profile again.",
+            statusCode: StatusCodes.Status409Conflict));
+    }
+
+    if (profile is null ||
+        string.IsNullOrWhiteSpace(profile.ProfessionalSummary) ||
+        (profile.ProfessionalSkills?.Count ?? 0) == 0)
+    {
+        return (profile, Results.Problem(
+            title: "Candidate profile needs to be completed",
+            detail: "Open My Profile and add a professional summary and at least one professional skill first.",
+            statusCode: StatusCodes.Status409Conflict));
+    }
+
+    return (profile, null);
+}
+
+static IResult? ValidateAiProvider(IConfiguration configuration)
+{
+    var provider = configuration["AI:Provider"] ?? "Gemini";
+    if (provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
+    {
+        return null;
+    }
+
+    if (!provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Problem(
+            title: "AI provider is not supported",
+            detail: "Set AI:Provider to either Gemini or Ollama in services/api/appsettings.Local.json.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    if (string.IsNullOrWhiteSpace(configuration["Gemini:ApiKey"]) &&
+        string.IsNullOrWhiteSpace(configuration["GEMINI_API_KEY"]))
+    {
+        return Results.Problem(
+            title: "Gemini API key is not configured",
+            detail: "Gemini is selected. Add your key under Gemini:ApiKey in services/api/appsettings.Local.json, or set GEMINI_API_KEY.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    return null;
+}
+
+static async Task<IResult> RunAiAsync(bool useOllama, CancellationToken cancellationToken, Func<Task<IResult>> action)
+{
+    try
+    {
+        return await action();
+    }
+    catch (OllamaApiException exception)
+    {
+        return Results.Problem(title: "Local AI request failed", detail: exception.Message, statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (GeminiApiException exception) when (exception.StatusCode == StatusCodes.Status429TooManyRequests)
+    {
+        return Results.Problem(title: "Gemini free-tier limit reached", detail: exception.Message, statusCode: StatusCodes.Status429TooManyRequests);
+    }
+    catch (GeminiApiException exception)
+    {
+        return Results.Problem(title: "AI request failed", detail: exception.Message, statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (HttpRequestException)
+    {
+        return Results.Problem(
+            title: useOllama ? "Local Ollama service could not be reached" : "Gemini could not be reached",
+            detail: useOllama
+                ? "Confirm the Ollama app is running and that its local API is available at the configured Ollama:BaseUrl."
+                : "Check your internet connection and try again. No paid-provider fallback is configured.",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        return Results.Problem(
+            title: "AI request timed out",
+            detail: useOllama
+                ? "The local model did not respond in time. Check Ollama resource usage and try again."
+                : "Gemini did not respond in time. Try again.",
+            statusCode: StatusCodes.Status504GatewayTimeout);
+    }
+}
+
+static CvDocument DeserializeCv(string json)
+{
+    try
+    {
+        return JsonSerializer.Deserialize<CvDocument>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? new CvDocument();
+    }
+    catch (JsonException)
+    {
+        return new CvDocument();
+    }
+}
+
+static GeneratedCvResponse ToGeneratedCvResponse(
+    SavedJob job,
+    GeneratedCv generated,
+    CandidateProfile profile,
+    CvDocument cv) => new(
+        job.Id,
+        job.JobTitle,
+        job.Company,
+        job.ApplicationStatus,
+        profile.Contact ?? new ContactDetails(),
+        cv,
+        generated.CustomInstructions,
+        generated.CreatedAtUtc,
+        generated.UpdatedAtUtc);
+
+static string BuildCvFileName(string? fullName, string? company, string? jobTitle)
+{
+    var parts = new[] { string.IsNullOrWhiteSpace(fullName) ? "CV" : $"{fullName} CV", company, jobTitle }
+        .Where(part => !string.IsNullOrWhiteSpace(part))
+        .Select(part => new string(part!.Where(character =>
+            char.IsLetterOrDigit(character) || character is ' ' or '-' or '_' or '.' or '#' or '+').ToArray()).Trim())
+        .Where(part => part.Length > 0);
+    var name = string.Join(" - ", parts);
+    if (name.Length > 120)
+    {
+        name = name[..120].TrimEnd();
+    }
+
+    return $"{(name.Length == 0 ? "CV" : name)}.docx";
+}
 
 static string GetPostgresConnectionString(IConfiguration configuration)
 {
@@ -579,9 +966,11 @@ static async Task<IResult> AnalyzeJobAsync(
             JobDescription = description
         };
 
+        // Contact details are only used locally for generated CVs; never send them to the provider.
+        var analysisProfile = profile.WithoutContact();
         var result = useOllama
-            ? await ollamaAnalyzer.AnalyzeAsync(normalizedRequest, profile, cancellationToken)
-            : await geminiAnalyzer.AnalyzeAsync(normalizedRequest, profile, cancellationToken);
+            ? await ollamaAnalyzer.AnalyzeAsync(normalizedRequest, analysisProfile, cancellationToken)
+            : await geminiAnalyzer.AnalyzeAsync(normalizedRequest, analysisProfile, cancellationToken);
 
         if (!request.SaveToHistory)
         {
@@ -691,6 +1080,18 @@ static async Task EnsureDatabaseReadyAsync(
                     FOREIGN KEY ("JobId") REFERENCES "SavedJobs" ("Id") ON DELETE CASCADE
             );
             """);
+
+        await database.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "GeneratedCvs" (
+                "JobId" TEXT NOT NULL CONSTRAINT "PK_GeneratedCvs" PRIMARY KEY,
+                "CvJson" TEXT NOT NULL,
+                "CustomInstructions" TEXT NOT NULL,
+                "CreatedAtUtc" TEXT NOT NULL,
+                "UpdatedAtUtc" TEXT NOT NULL,
+                CONSTRAINT "FK_GeneratedCvs_SavedJobs_JobId"
+                    FOREIGN KEY ("JobId") REFERENCES "SavedJobs" ("Id") ON DELETE CASCADE
+            );
+            """);
     }
     else if (providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
     {
@@ -711,6 +1112,18 @@ static async Task EnsureDatabaseReadyAsync(
                 "SizeBytes" bigint NOT NULL,
                 "UploadedAtUtc" timestamp with time zone NOT NULL,
                 CONSTRAINT "FK_JobCvAttachments_SavedJobs_JobId"
+                    FOREIGN KEY ("JobId") REFERENCES "SavedJobs" ("Id") ON DELETE CASCADE
+            );
+            """);
+
+        await database.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "GeneratedCvs" (
+                "JobId" uuid NOT NULL CONSTRAINT "PK_GeneratedCvs" PRIMARY KEY,
+                "CvJson" text NOT NULL,
+                "CustomInstructions" character varying(4000) NOT NULL,
+                "CreatedAtUtc" timestamp with time zone NOT NULL,
+                "UpdatedAtUtc" timestamp with time zone NOT NULL,
+                CONSTRAINT "FK_GeneratedCvs_SavedJobs_JobId"
                     FOREIGN KEY ("JobId") REFERENCES "SavedJobs" ("Id") ON DELETE CASCADE
             );
             """);
@@ -797,6 +1210,11 @@ static Dictionary<string, string[]> ValidateCandidateProfile(CandidateProfile pr
         (item.Language?.Length ?? 0) > 100 || (item.Proficiency?.Length ?? 0) > 160))
         AddError("languageEntry", "Language names must be 100 characters or fewer and proficiency descriptions 160 characters or fewer.");
 
+    var contact = profile.Contact ?? new ContactDetails();
+    if (new[] { contact.FullName, contact.Email, contact.Phone, contact.Location, contact.LinkedIn, contact.Website }
+        .Any(value => (value?.Length ?? 0) > 200))
+        AddError("contact", "Each contact detail must be 200 characters or fewer.");
+
     return errors;
 }
 
@@ -834,6 +1252,15 @@ static CandidateProfile NormalizeCandidateProfile(CandidateProfile profile)
             .ToList(),
         WorkAuthorization = Clean(profile.WorkAuthorization),
         Certifications = CleanList(profile.Certifications),
-        Constraints = CleanList(profile.Constraints)
+        Constraints = CleanList(profile.Constraints),
+        Contact = new ContactDetails
+        {
+            FullName = Clean(profile.Contact?.FullName),
+            Email = Clean(profile.Contact?.Email),
+            Phone = Clean(profile.Contact?.Phone),
+            Location = Clean(profile.Contact?.Location),
+            LinkedIn = Clean(profile.Contact?.LinkedIn),
+            Website = Clean(profile.Contact?.Website)
+        }
     };
 }

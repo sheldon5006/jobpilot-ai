@@ -58,7 +58,7 @@ h1 { margin-bottom: 7px; font-size: clamp(23px,2vw,30px); letter-spacing: -.055e
 .button-secondary { flex: 0 0 auto; color: #46516a; background: white; border-color: var(--line); }
 .button-secondary:hover:not(:disabled) { background: #f8faff; }
 
-.stats-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 13px; margin-bottom: 21px; }
+.stats-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 13px; margin-bottom: 21px; }
 .stat-card { min-height: 110px; display: flex; flex-direction: column; align-items: flex-start; padding: 17px 18px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); box-shadow: 0 2px 4px #17203303; }
 .stat-label { color: #78849a; font-size: 10px; font-weight: 600; }
 .stat-card strong { margin: 8px 0 3px; font: 800 26px Manrope,sans-serif; letter-spacing: -.05em; }
@@ -108,6 +108,7 @@ input:focus, textarea:focus, select:focus { border-color: #6481ee; box-shadow: 0
 .status-tag, .recommendation-text { padding: 4px 6px; border-radius: 5px; font-size: 8px; font-weight: 800; }
 .status-tag { color: #596780; background: #f0f3f8; }
 .status-applied { color: #3159c7; background: #edf2ff; }
+.status-attempt { color: #7a4fc4; background: #f4efff; }
 .status-interview, .status-offer { color: #1c8053; background: #e8f8ef; }
 .status-rejected { color: #a64242; background: #fff0f0; }
 .recommendation-text { background: #f3f5f8; color: #596780; }
@@ -263,3 +264,13 @@ input:focus, textarea:focus, select:focus { border-color: #6481ee; box-shadow: 0
 }
 
 .cv-attached-tag { padding: 4px 6px; border-radius: 5px; color: #23744e; background: #e8f8ef; font-size: 8px; font-weight: 800; }
+.cv-generated-tag { color: #6a43b5; background: #f4efff; }
+.generated-cv-section { border-color: #e2d9f7; background: #fcfaff; }
+.generated-cv-preview { max-height: 460px; margin: 10px 0 12px; padding: 18px 20px; overflow: auto; border: 1px solid #e6e9f0; border-radius: 9px; background: #fff; color: #253044; font-size: 11px; line-height: 1.55; }
+.generated-cv-preview h3.generated-cv-name { margin: 0; color: #1f3a93; font-size: 18px; }
+.generated-cv-preview .generated-cv-headline { margin: 2px 0 0; color: #475369; font-size: 12px; }
+.generated-cv-preview .generated-cv-contact { margin: 4px 0 0; color: #7c8799; font-size: 10px; }
+.generated-cv-preview h4 { margin: 14px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #c9d3ef; color: #1f3a93; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.generated-cv-preview p { margin: 0 0 6px; }
+.generated-cv-preview .generated-cv-role { margin: 8px 0 3px; font-weight: 700; }
+.generated-cv-preview ul { margin: 0 0 4px; padding-left: 18px; }

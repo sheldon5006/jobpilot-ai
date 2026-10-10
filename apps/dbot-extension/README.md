@@ -58,7 +58,26 @@ Both settings are off by default. No applications are submitted. The extension d
 
 Successful analyses are saved to the API's shared saved-job history, which also appears in the JobPilot dashboard.
 
+## Make a tailored CV
+
+1. Load a job in the **Job** tab (fetch it or paste it).
+2. Optionally open **Customise CV prompt**. *Standing instructions* are saved in the extension and used for every CV; *extra instructions for this job* apply once. **Reset to default** restores the built-in instructions.
+3. Click **Make CV**. If the job hasn't been analysed yet, DBot analyses and saves it first, then generates the CV. A `Saved` job becomes an **Attempt** in the dashboard.
+4. Edit any section, then **Save edits** or **Download DOCX**. The CV is also available under the job in the dashboard.
+
+Truthfulness rules can't be overridden by your instructions. Role titles, dates, education, languages and certifications come straight from your profile. Skills that aren't in your profile are removed. AI-written bullet points can still over-state your experience, so check them before you send the CV.
+
+## My profile tab
+
+Shows your saved profile with click-to-copy rows (contact details, summary, work authorisation, languages, each role, skills and education), so you can quickly paste them into application forms. Add contact details under **My Profile** in the dashboard.
+
+## Ask AI tab
+
+Paste a question from an application form (for example, "Why are you interested in this position?"). DBot drafts a first-person answer from your profile. If **Use the current job** is ticked, the answer is tailored to the job in the Job tab. Choose a length, add optional instructions, then copy the answer. If a fact your profile doesn't contain is needed (such as a salary expectation or start date), the answer shows a `[placeholder]` instead of guessing.
+
 ## Privacy and permissions
+
+- Contact details are stored in your profile but are never sent to the AI provider. They are added locally to generated CVs.
 
 - Page extraction runs in the active webpage only when requested manually or when Auto-fetch has been enabled.
 - Broad access to HTTP/HTTPS sites is optional and is requested only when you turn on Auto-fetch.
@@ -69,5 +88,5 @@ Successful analyses are saved to the API's shared saved-job history, which also 
 ## Current boundaries
 
 - Extraction is heuristic; job-board markup varies and may need manual corrections.
-- The extension does not generate CVs or submit applications.
+- Generated CVs and answers are drafts: review every line before sending. The extension never submits applications.
 - The recommendation is decision support, not a prediction of interview success.

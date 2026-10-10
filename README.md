@@ -8,7 +8,7 @@ JobPilot AI is a personal job-search assistant built around **DBot**, a Chrome e
 - Compare a vacancy with a verified candidate profile.
 - Return an explainable recommendation: **Apply**, **Review**, or **Skip**.
 - Keep a career profile and timeline as the source of truth for job analysis.
-- Attach the exact PDF/DOCX CV used for each application; automatic CV generation is still planned.
+- Generate a tailored CV for a job from the verified profile (editable, downloadable as DOCX), or attach the exact PDF/DOCX CV used for each application.
 - Track evaluated jobs, generated CV versions, application status, and follow-ups.
 
 ## Monorepo layout
@@ -35,7 +35,9 @@ Folders are introduced incrementally so each milestone can be run and verified l
 4. The dashboard lists saved jobs and recommendations, and lets you update application status and notes.
 5. My Profile presents an editable career storyboard; changes are persisted and used by future analyses.
 6. Attach, download, or remove the CV file used for an individual saved job.
-7. PostgreSQL can be configured for hosted deployment.
+7. Generate a tailored CV with DBot's **Make CV** button; the job is marked as an **Attempt** in the dashboard.
+8. Draft answers to application-form questions and copy profile details from the DBot side panel.
+9. PostgreSQL can be configured for hosted deployment.
 
 See [the API setup guide](services/api/README.md), [the extension setup guide](apps/dbot-extension/README.md), and [the dashboard guide](apps/dashboard/README.md).
 

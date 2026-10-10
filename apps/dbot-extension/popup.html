@@ -17,10 +17,17 @@
         </div>
         <div class="header-actions">
           <button id="toggle-page-tools-button" class="header-toggle-button" type="button" aria-controls="page-tools-content" aria-expanded="false" aria-label="Show page detection settings" title="Show or hide page detection settings">Tools</button>
-          <span class="version-tag">0.3.0</span>
+          <span class="version-tag">0.4.0</span>
         </div>
       </header>
 
+      <nav class="tab-bar" role="tablist" aria-label="DBot sections">
+        <button id="tab-job" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="panel-job" data-tab="job">Job</button>
+        <button id="tab-profile" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-profile" data-tab="profile">My profile</button>
+        <button id="tab-ask" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-ask" data-tab="ask">Ask AI</button>
+      </nav>
+
+      <div id="panel-job" class="tab-panel" role="tabpanel" aria-labelledby="tab-job">
       <section class="manual-fetch-area" aria-label="Manual page scan">
         <button id="fetch-current-page-button" class="secondary-button" type="button">↧ Fetch job details from page</button>
         <p id="page-fetch-status" class="page-fetch-status" role="status">Ready. Select a job listing and fetch its details.</p>
@@ -104,6 +111,113 @@
         <p id="result-copy" class="result-copy fit-verdict">Strong fit / Not a strong fit</p>
         <p class="result-disclaimer">Fit score is an estimate, not an interview probability. DBot does not submit applications.</p>
       </section>
+
+      <section id="cv-builder" class="tool-card" aria-labelledby="cv-builder-title">
+        <div class="tool-card-heading">
+          <div>
+            <p class="eyebrow">TAILORED CV</p>
+            <h2 id="cv-builder-title">Make a CV for this job</h2>
+          </div>
+        </div>
+        <p class="tool-card-copy">Generates a CV from your saved profile, tailored to the job above, and saves it in the dashboard as an <strong>Attempt</strong>. The job is analysed first if needed.</p>
+
+        <details id="cv-prompt-layer" class="prompt-layer">
+          <summary>Customise CV prompt</summary>
+          <label for="cv-instructions">Your standing CV instructions <span class="optional">(saved for every CV)</span></label>
+          <textarea id="cv-instructions" rows="7" maxlength="3000" placeholder="Loading the default instructions…"></textarea>
+          <div class="inline-actions">
+            <button id="reset-cv-instructions-button" class="link-button" type="button">Reset to default</button>
+            <span id="cv-instructions-saved" class="inline-status" aria-live="polite"></span>
+          </div>
+          <label for="cv-job-instructions">Extra instructions for this job only <span class="optional">(optional)</span></label>
+          <textarea id="cv-job-instructions" rows="3" maxlength="1000" placeholder="e.g. Emphasise my ERP work and keep it to one page."></textarea>
+          <p class="field-hint">Your instructions control tone, emphasis and layout. DBot still never invents roles, dates, skills or qualifications that are not in your profile.</p>
+        </details>
+
+        <button id="make-cv-button" class="primary-button" type="button">
+          <span aria-hidden="true">▤</span>
+          <span id="make-cv-label">Make CV</span>
+        </button>
+        <p id="cv-status" class="page-fetch-status" role="status"></p>
+
+        <div id="cv-editor" class="cv-editor" hidden>
+          <label for="cv-headline">Headline</label>
+          <input id="cv-headline" type="text" maxlength="140" />
+          <label for="cv-summary">Profile summary</label>
+          <textarea id="cv-summary" rows="5" maxlength="3000"></textarea>
+          <label for="cv-skills">Skills <span class="optional">(one group per line: Category: skill, skill)</span></label>
+          <textarea id="cv-skills" rows="4"></textarea>
+          <p class="cv-editor-section-title">Experience</p>
+          <div id="cv-experience-editor" class="cv-experience-editor"></div>
+          <label for="cv-education">Education <span class="optional">(one per line)</span></label>
+          <textarea id="cv-education" rows="2"></textarea>
+          <label for="cv-certifications">Certifications <span class="optional">(one per line)</span></label>
+          <textarea id="cv-certifications" rows="2"></textarea>
+          <label for="cv-languages">Languages <span class="optional">(one per line)</span></label>
+          <textarea id="cv-languages" rows="2"></textarea>
+          <div class="button-row">
+            <button id="save-cv-button" class="secondary-button" type="button">Save edits</button>
+            <button id="download-cv-button" class="secondary-button" type="button">⇩ Download DOCX</button>
+          </div>
+          <p class="field-hint">Check every line before you send it. Your contact details are added from your profile and are never sent to the AI provider.</p>
+        </div>
+      </section>
+      </div>
+
+      <div id="panel-profile" class="tab-panel" role="tabpanel" aria-labelledby="tab-profile" hidden>
+        <div class="tool-card-heading profile-panel-heading">
+          <div>
+            <p class="eyebrow">QUICK COPY</p>
+            <h2>My profile</h2>
+          </div>
+          <button id="refresh-profile-button" class="header-toggle-button" type="button">↻ Refresh</button>
+        </div>
+        <p class="tool-card-copy">Click any item to copy it into an application form. Edit your profile in the JobPilot dashboard.</p>
+        <p id="profile-status" class="page-fetch-status" role="status"></p>
+        <div id="profile-content" class="profile-content"></div>
+      </div>
+
+      <div id="panel-ask" class="tab-panel" role="tabpanel" aria-labelledby="tab-ask" hidden>
+        <section class="tool-card" aria-labelledby="ask-title">
+          <div class="tool-card-heading">
+            <div>
+              <p class="eyebrow">APPLICATION QUESTIONS</p>
+              <h2 id="ask-title">Answer a form question</h2>
+            </div>
+          </div>
+          <p class="tool-card-copy">Paste a question from the application form, e.g. “Why are you interested in this position?”. DBot drafts an answer from your profile.</p>
+          <form id="ask-form">
+            <label for="ask-question">Question</label>
+            <textarea id="ask-question" rows="4" maxlength="2000" required placeholder="Paste the question here…"></textarea>
+            <div class="ask-options">
+              <label class="setting-row inline-setting" for="ask-use-job">
+                <input id="ask-use-job" type="checkbox" checked />
+                <span><strong>Use the current job</strong><small id="ask-job-context">No job loaded in the Job tab yet.</small></span>
+              </label>
+              <label class="select-label" for="ask-length">Length
+                <select id="ask-length">
+                  <option value="short">Short</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="long">Long</option>
+                </select>
+              </label>
+            </div>
+            <label for="ask-instructions">Extra instructions <span class="optional">(optional)</span></label>
+            <input id="ask-instructions" type="text" maxlength="2000" placeholder="e.g. Mention that I can start in March. Answer in German." />
+            <button id="ask-button" class="primary-button" type="submit">
+              <span aria-hidden="true">✦</span>
+              <span id="ask-button-label">Generate answer</span>
+            </button>
+          </form>
+          <p id="ask-status" class="page-fetch-status" role="status"></p>
+          <div id="ask-answer-area" class="ask-answer-area" hidden>
+            <label for="ask-answer">Answer <span class="optional">(editable)</span></label>
+            <textarea id="ask-answer" rows="8"></textarea>
+            <button id="copy-answer-button" class="secondary-button" type="button">⧉ Copy answer</button>
+            <p class="field-hint">Fill in anything shown in [square brackets] before you paste it. Answers never include facts that are not in your profile.</p>
+          </div>
+        </section>
+      </div>
 
       <footer>
         <span class="status-dot" aria-hidden="true"></span>

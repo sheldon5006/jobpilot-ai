@@ -686,3 +686,133 @@ footer {
   .header-toggle-button { padding: 6px 7px; }
   .score-summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
+
+/* Tabs */
+.tab-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 14px 0 0;
+  padding: 4px;
+  border: 1px solid #dfe6f3;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+}
+.tab-button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 7px;
+  color: #5b6880;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+.tab-button:hover { color: #304b9f; background: #f2f5fd; }
+.tab-button.active { color: #fff; background: #3158d8; box-shadow: 0 3px 8px rgba(49, 88, 216, 0.18); }
+.tab-panel[hidden] { display: none; }
+#panel-profile, #panel-ask { margin-top: 14px; }
+
+/* Shared tool cards */
+.tool-card {
+  margin-top: 17px;
+  padding: 13px;
+  border: 1px solid #dfe6f3;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.85);
+}
+.tool-card form { gap: 6px; }
+.tool-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tool-card-heading h2 { margin: 0; font-size: 14px; line-height: 1.35; }
+.tool-card-copy { margin: 6px 0 10px; color: #68758b; font-size: 11px; line-height: 1.5; }
+.button-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.link-button {
+  padding: 0;
+  border: 0;
+  color: #3158d8;
+  background: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+.inline-actions { display: flex; align-items: center; gap: 10px; margin: 4px 0 2px; }
+.inline-status { color: #167244; font-size: 10px; }
+select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #dce3ed;
+  border-radius: 8px;
+  color: #182230;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+}
+
+/* CV prompt layer and editor */
+.prompt-layer {
+  margin-bottom: 10px;
+  padding: 9px 10px;
+  border: 1px dashed #c9d5f2;
+  border-radius: 9px;
+  background: #f8faff;
+}
+.prompt-layer summary { color: #304b9f; cursor: pointer; font-size: 11px; font-weight: 800; }
+.prompt-layer[open] summary { margin-bottom: 4px; }
+.prompt-layer label { display: block; }
+.prompt-layer textarea { min-height: 70px; margin-top: 4px; }
+.cv-editor { display: grid; gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e8edf5; }
+.cv-editor textarea { min-height: 60px; }
+.cv-editor-section-title { margin: 8px 0 0; font-size: 12px; font-weight: 700; }
+.cv-experience-editor { display: grid; gap: 8px; }
+.cv-role-card { display: grid; gap: 6px; padding: 8px; border: 1px solid #e4eaf4; border-radius: 9px; background: #fbfcff; }
+.cv-role-header { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 6px; }
+.cv-role-header input { height: 32px; }
+.cv-role-card [data-field="role"] { font-weight: 700; }
+
+/* Profile quick-copy */
+.profile-content { display: grid; gap: 12px; }
+.profile-section { display: grid; gap: 5px; }
+.profile-section h3 {
+  margin: 0 0 2px;
+  color: #74819a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.copy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "label hint" "value value";
+  gap: 2px 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e1e8f4;
+  border-radius: 9px;
+  color: #182230;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.copy-row:hover { border-color: #b9c9f5; background: #f7f9ff; }
+.copy-row.copied { border-color: #b6e1c7; background: #f1fbf5; }
+.copy-row-label { grid-area: label; color: #8490a2; font-size: 9px; font-weight: 700; }
+.copy-row-value { grid-area: value; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.copy-row.multiline .copy-row-value { white-space: pre-line; font-size: 11px; }
+.copy-row-hint { grid-area: hint; color: #3158d8; font-size: 9px; font-weight: 800; }
+.copy-row.copied .copy-row-hint { color: #167244; }
+
+/* Ask AI */
+.ask-options { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.inline-setting { flex: 1; margin: 0; }
+.select-label { display: grid; gap: 4px; margin-top: 0; font-size: 10px; }
+.ask-answer-area { display: grid; gap: 6px; margin-top: 10px; }
+.ask-answer-area textarea { min-height: 150px; }
+.cv-editor[hidden], .ask-answer-area[hidden] { display: none; }

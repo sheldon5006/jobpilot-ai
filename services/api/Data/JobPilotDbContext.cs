@@ -8,6 +8,7 @@ public sealed class JobPilotDbContext(DbContextOptions<JobPilotDbContext> option
 {
     public DbSet<SavedJob> SavedJobs => Set<SavedJob>();
     public DbSet<JobCvAttachment> JobCvAttachments => Set<JobCvAttachment>();
+    public DbSet<GeneratedCv> GeneratedCvs => Set<GeneratedCv>();
     public DbSet<CandidateProfileDocument> CandidateProfiles => Set<CandidateProfileDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -29,6 +30,17 @@ public sealed class JobPilotDbContext(DbContextOptions<JobPilotDbContext> option
             .WithOne(attachment => attachment.Job)
             .HasForeignKey<JobCvAttachment>(attachment => attachment.JobId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        job.HasOne(item => item.GeneratedCv)
+            .WithOne(generated => generated.Job)
+            .HasForeignKey<GeneratedCv>(generated => generated.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var generatedCv = modelBuilder.Entity<GeneratedCv>();
+        generatedCv.ToTable("GeneratedCvs");
+        generatedCv.HasKey(item => item.JobId);
+        generatedCv.Property(item => item.CvJson).IsRequired();
+        generatedCv.Property(item => item.CustomInstructions).HasMaxLength(4000);
 
         var cv = modelBuilder.Entity<JobCvAttachment>();
         cv.ToTable("JobCvAttachments");

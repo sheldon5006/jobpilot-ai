@@ -39,6 +39,7 @@ interface SavedJobListItem {
   applicationStatus: string;
   hasCv: boolean;
   cvFileName: string | null;
+  hasGeneratedCv: boolean;
   createdAtUtc: string;
   updatedAtUtc: string;
 }
@@ -53,9 +54,37 @@ interface SavedJobDetails {
   cvFileName: string | null;
   cvUploadedAtUtc: string | null;
   cvSizeBytes: number | null;
+  generatedCvUpdatedAtUtc: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
   analysis: JobAnalysisResult;
+}
+
+interface CvDocument {
+  headline: string;
+  summary: string;
+  skillGroups: Array<{ category: string; skills: string[] }>;
+  experience: Array<{ role: string; period: string; bullets: string[] }>;
+  education: string[];
+  languages: string[];
+  certifications: string[];
+}
+
+interface GeneratedCvResponse {
+  jobId: string;
+  contact: ContactDetails;
+  cv: CvDocument;
+  customInstructions: string;
+  updatedAtUtc: string;
+}
+
+interface ContactDetails {
+  fullName: string;
+  email: string;
+  phone: string;
+  location: string;
+  linkedIn: string;
+  website: string;
 }
 
 interface ExperienceEntry {
@@ -80,6 +109,7 @@ interface CandidateProfile {
   workAuthorization: string;
   certifications: string[];
   constraints: string[];
+  contact: ContactDetails;
 }
 
 interface CandidateProfileResponse {
@@ -93,7 +123,7 @@ interface ApiProblem {
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5080").replace(/\/$/, "");
-const statuses = ["Saved", "Applied", "Interview", "Rejected", "Offer"];
+const statuses = ["Saved", "Attempt", "Applied", "Interview", "Rejected", "Offer"];
 const maxCvBytes = 10 * 1024 * 1024;
 let savedJobs: SavedJobListItem[] = [];
 let selectedJobId: string | null = null;
@@ -135,6 +165,21 @@ const downloadCvButton = element<HTMLButtonElement>("#download-cv-button");
 const deleteCvButton = element<HTMLButtonElement>("#delete-cv-button");
 const cvCurrentInfo = element<HTMLElement>("#cv-current-info");
 const cvMessage = element<HTMLElement>("#cv-message");
+const generatedCvEmpty = element<HTMLElement>("#generated-cv-empty");
+const generatedCvContent = element<HTMLElement>("#generated-cv-content");
+const generatedCvInfo = element<HTMLElement>("#generated-cv-info");
+const generatedCvPreview = element<HTMLElement>("#generated-cv-preview");
+const generatedCvMessage = element<HTMLElement>("#generated-cv-message");
+const downloadGeneratedCvButton = element<HTMLButtonElement>("#download-generated-cv-button");
+const deleteGeneratedCvButton = element<HTMLButtonElement>("#delete-generated-cv-button");
+const contactInputs = {
+  fullName: element<HTMLInputElement>("#contact-name-input"),
+  email: element<HTMLInputElement>("#contact-email-input"),
+  phone: element<HTMLInputElement>("#contact-phone-input"),
+  location: element<HTMLInputElement>("#contact-location-input"),
+  linkedIn: element<HTMLInputElement>("#contact-linkedin-input"),
+  website: element<HTMLInputElement>("#contact-website-input")
+};
 
 const profileLoading = element<HTMLElement>("#profile-loading");
 const profileStoryView = element<HTMLElement>("#profile-story-view");
@@ -215,6 +260,7 @@ function createTextElement(tag: string, className: string, text: string): HTMLEl
 function renderStats(): void {
   element<HTMLElement>("#stat-total").textContent = String(savedJobs.length);
   element<HTMLElement>("#stat-strong").textContent = String(savedJobs.filter(job => job.matchScore >= 80).length);
+  element<HTMLElement>("#stat-attempts").textContent = String(savedJobs.filter(job => job.applicationStatus === "Attempt").length);
   element<HTMLElement>("#stat-applied").textContent = String(savedJobs.filter(job => job.applicationStatus === "Applied").length);
   element<HTMLElement>("#stat-interviews").textContent = String(savedJobs.filter(job => job.applicationStatus === "Interview").length);
 }
@@ -257,6 +303,9 @@ function renderJobs(): void {
     bottom.append(statusTag, recommendation, createTextElement("span", "job-date", formatDate(job.createdAtUtc)));
     if (job.hasCv) {
       bottom.append(createTextElement("span", "cv-attached-tag", "CV attached"));
+    }
+    if (job.hasGeneratedCv) {
+      bottom.append(createTextElement("span", "cv-attached-tag cv-generated-tag", "CV generated"));
     }
 
     card.append(top, company, bottom);
@@ -364,11 +413,59 @@ async function openJob(id: string, scroll = true): Promise<void> {
       : "No CV attached to this job.";
     cvCurrentInfo.classList.toggle("has-cv", hasCv);
     setMessage(cvMessage, "", "info");
+    await loadGeneratedCv(job);
     detailsPanel.hidden = false;
     setMessage(saveMessage, "", "info");
     if (scroll) detailsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     setMessage(saveMessage, error instanceof Error ? error.message : "Could not load this saved job.", "error");
+  }
+}
+
+function renderGeneratedCvPreview(contact: ContactDetails, cv: CvDocument): void {
+  generatedCvPreview.replaceChildren();
+  const heading = (text: string) => createTextElement("h4", "", text);
+  const list = (items: string[]) => {
+    const target = document.createElement("ul");
+    items.forEach(item => target.append(createTextElement("li", "", item)));
+    return target;
+  };
+
+  if (contact.fullName) generatedCvPreview.append(createTextElement("h3", "generated-cv-name", contact.fullName));
+  if (cv.headline) generatedCvPreview.append(createTextElement("p", "generated-cv-headline", cv.headline));
+  const contactLine = [contact.email, contact.phone, contact.location, contact.linkedIn, contact.website].filter(Boolean).join(" · ");
+  if (contactLine) generatedCvPreview.append(createTextElement("p", "generated-cv-contact", contactLine));
+
+  if (cv.summary) generatedCvPreview.append(heading("Profile"), createTextElement("p", "", cv.summary));
+  if (cv.skillGroups.length > 0) {
+    generatedCvPreview.append(heading("Skills"), list(cv.skillGroups.map(group =>
+      group.category ? `${group.category}: ${group.skills.join(", ")}` : group.skills.join(", "))));
+  }
+  if (cv.experience.length > 0) {
+    generatedCvPreview.append(heading("Experience"));
+    for (const role of cv.experience) {
+      generatedCvPreview.append(createTextElement("p", "generated-cv-role", [role.role, role.period].filter(Boolean).join(" · ")));
+      generatedCvPreview.append(list(role.bullets));
+    }
+  }
+  if (cv.education.length > 0) generatedCvPreview.append(heading("Education"), list(cv.education));
+  if (cv.certifications.length > 0) generatedCvPreview.append(heading("Certifications"), list(cv.certifications));
+  if (cv.languages.length > 0) generatedCvPreview.append(heading("Languages"), list(cv.languages));
+}
+
+async function loadGeneratedCv(job: SavedJobDetails): Promise<void> {
+  setMessage(generatedCvMessage, "", "info");
+  const hasGeneratedCv = Boolean(job.generatedCvUpdatedAtUtc);
+  generatedCvEmpty.hidden = hasGeneratedCv;
+  generatedCvContent.hidden = !hasGeneratedCv;
+  if (!hasGeneratedCv) return;
+
+  try {
+    const generated = await api<GeneratedCvResponse>(`/api/jobs/${encodeURIComponent(job.id)}/generated-cv`);
+    generatedCvInfo.textContent = `Last updated ${formatDate(generated.updatedAtUtc)}${generated.customInstructions ? " · custom prompt used" : ""}`;
+    renderGeneratedCvPreview(generated.contact, generated.cv);
+  } catch (error) {
+    setMessage(generatedCvMessage, error instanceof Error ? error.message : "Could not load the generated CV.", "error");
   }
 }
 
@@ -442,6 +539,15 @@ function renderProfileStory(profile: CandidateProfile, updatedAtUtc: string): vo
     });
   }
 
+  const contact = profile.contact ?? emptyContact();
+  renderStrings(
+    element<HTMLElement>("#profile-contact-view"),
+    [
+      ["Name", contact.fullName], ["Email", contact.email], ["Phone", contact.phone],
+      ["Location", contact.location], ["LinkedIn", contact.linkedIn], ["Website", contact.website]
+    ].filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`),
+    "Contact details not added yet."
+  );
   renderStrings(element<HTMLElement>("#profile-education-view"), profile.education, "Education not added yet.");
   renderStrings(
     element<HTMLElement>("#profile-language-view"),
@@ -556,7 +662,15 @@ function fillProfileEditor(profile: CandidateProfile): void {
     .join("\n");
   profileWorkAuthInput.value = profile.workAuthorization;
   profileConstraintsInput.value = formatLines(profile.constraints);
+  const contact = profile.contact ?? emptyContact();
+  for (const key of Object.keys(contactInputs) as Array<keyof ContactDetails>) {
+    contactInputs[key].value = contact[key] ?? "";
+  }
   renderExperienceEditor(profile.experience);
+}
+
+function emptyContact(): ContactDetails {
+  return { fullName: "", email: "", phone: "", location: "", linkedIn: "", website: "" };
 }
 
 function buildProfileFromForm(): CandidateProfile {
@@ -570,7 +684,15 @@ function buildProfileFromForm(): CandidateProfile {
     languages: parseLanguages(profileLanguagesInput.value),
     workAuthorization: profileWorkAuthInput.value.trim(),
     certifications: parseLines(profileCertificationsInput.value),
-    constraints: parseLines(profileConstraintsInput.value)
+    constraints: parseLines(profileConstraintsInput.value),
+    contact: {
+      fullName: contactInputs.fullName.value.trim(),
+      email: contactInputs.email.value.trim(),
+      phone: contactInputs.phone.value.trim(),
+      location: contactInputs.location.value.trim(),
+      linkedIn: contactInputs.linkedIn.value.trim(),
+      website: contactInputs.website.value.trim()
+    }
   };
 }
 
@@ -716,6 +838,47 @@ deleteCvButton.addEventListener("click", async () => {
     setMessage(cvMessage, error instanceof Error ? error.message : "The CV could not be removed.", "error");
   } finally {
     deleteCvButton.disabled = false;
+  }
+});
+
+downloadGeneratedCvButton.addEventListener("click", async () => {
+  if (!selectedJobId) return;
+  downloadGeneratedCvButton.disabled = true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(selectedJobId)}/generated-cv/docx`);
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => null)) as ApiProblem | null;
+      throw new Error(problem?.detail || problem?.title || `CV download failed with HTTP ${response.status}.`);
+    }
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const fileName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
+      ?? /filename="?([^";]+)"?/i.exec(disposition)?.[1]
+      ?? "CV.docx";
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = decodeURIComponent(fileName);
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (error) {
+    setMessage(generatedCvMessage, error instanceof Error ? error.message : "The CV could not be downloaded.", "error");
+  } finally {
+    downloadGeneratedCvButton.disabled = false;
+  }
+});
+
+deleteGeneratedCvButton.addEventListener("click", async () => {
+  if (!selectedJobId || !window.confirm("Delete the CV DBot generated for this job? The job status is not changed.")) return;
+  deleteGeneratedCvButton.disabled = true;
+  try {
+    await api<void>(`/api/jobs/${encodeURIComponent(selectedJobId)}/generated-cv`, { method: "DELETE" });
+    await loadJobs();
+  } catch (error) {
+    setMessage(generatedCvMessage, error instanceof Error ? error.message : "The generated CV could not be deleted.", "error");
+  } finally {
+    deleteGeneratedCvButton.disabled = false;
   }
 });
 
