@@ -96,6 +96,10 @@
             </div>
             <div class="toolbar">
               <label class="search-box"><span aria-hidden="true">⌕</span><input id="job-search" type="search" placeholder="Search roles or companies…" aria-label="Search saved jobs" /></label>
+              <select id="sort-order" aria-label="Sort saved jobs">
+                <option value="recent">Most recent</option>
+                <option value="fit">Best fit first</option>
+              </select>
               <select id="status-filter" aria-label="Filter by application status">
                 <option value="All">All statuses</option>
                 <option value="Saved">Saved</option>
@@ -124,7 +128,7 @@
             <button id="close-details" class="icon-button" type="button" aria-label="Close job details">×</button>
           </div>
           <div class="detail-summary-grid">
-            <div class="fit-card"><span class="stat-label">Fit score</span><strong id="detail-score">—</strong><div class="score-track"><span id="detail-score-bar"></span></div><span id="detail-recommendation" class="recommendation-pill review">Review</span></div>
+            <div class="fit-card"><span class="stat-label">Fit score</span><strong id="detail-score">—</strong><div class="score-track"><span id="detail-score-bar"></span></div><span id="detail-recommendation" class="recommendation-pill review">Review</span><ul id="detail-breakdown" class="detail-breakdown"></ul><p id="detail-breakdown-note" class="detail-breakdown-note"></p></div>
             <div class="role-summary"><h3>Role summary</h3><p id="detail-role-summary" class="muted"></p><h3>Overall assessment</h3><p id="detail-assessment" class="assessment-copy"></p></div>
           </div>
           <div class="detail-sections">
