@@ -860,3 +860,16 @@ select {
 .redirect-uri { display: block; margin-top: 6px; padding: 7px 8px; border-radius: 6px; background: #eef2fb; font-size: 10px; overflow-wrap: anywhere; user-select: all; }
 .account-row { margin: 16px 0 0; color: #74819a; font-size: 10px; overflow-wrap: anywhere; }
 .account-row strong { color: #3a4760; }
+
+/* Score breakdown */
+.score-breakdown { margin: 8px 0 2px; padding: 9px 10px; border: 1px solid #d9e4fb; border-radius: 9px; background: rgba(255, 255, 255, 0.85); }
+.score-breakdown[hidden] { display: none; }
+.score-breakdown-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.score-breakdown-list li { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: #58667c; }
+.score-breakdown-list strong { color: #1f2a3d; text-align: right; }
+.score-breakdown-note { margin: 7px 0 0; color: #8a5a1f; font-size: 10px; line-height: 1.45; }
+.score-breakdown-note[hidden] { display: none; }
+@media (pointer: coarse) {
+  .score-breakdown-list li { font-size: 13px; }
+  .score-breakdown-note { font-size: 12px; }
+}

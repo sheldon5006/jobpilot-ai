@@ -13,8 +13,21 @@ interface RequirementGap {
   explanation: string;
 }
 
+interface FitScoreBreakdown {
+  mustHaveMet: number;
+  mustHaveTotal: number;
+  preferredMet: number;
+  preferredTotal: number;
+  professionalEvidence: number;
+  internshipEvidence: number;
+  projectEvidence: number;
+  capReason?: string | null;
+  confidence?: string;
+}
+
 interface JobAnalysisResult {
   jobId?: string;
+  scoreBreakdown?: FitScoreBreakdown | null;
   analyzedAtUtc?: string;
   recommendation: string;
   matchScore: number;
@@ -165,6 +178,7 @@ const emptyState = element<HTMLElement>("#empty-state");
 const jobCount = element<HTMLElement>("#job-count");
 const jobSearch = element<HTMLInputElement>("#job-search");
 const statusFilter = element<HTMLSelectElement>("#status-filter");
+const sortOrder = element<HTMLSelectElement>("#sort-order");
 const detailsPanel = element<HTMLElement>("#job-details");
 const saveMessage = element<HTMLElement>("#save-message");
 const saveJobButton = element<HTMLButtonElement>("#save-job-button");
@@ -302,6 +316,11 @@ function renderJobs(): void {
     const matchesSearch = `${job.jobTitle} ${job.company} ${job.summary}`.toLocaleLowerCase().includes(query);
     return matchesSearch && (status === "All" || job.applicationStatus === status);
   });
+  if (sortOrder.value === "fit") {
+    // Skips sink to the bottom; otherwise the highest evidence-based score first.
+    const rank = (job: SavedJobListItem) => (job.recommendation === "Skip" ? -1000 : 0) + job.matchScore;
+    filtered.sort((left, right) => rank(right) - rank(left));
+  }
 
   jobCount.textContent = `${filtered.length} ${filtered.length === 1 ? "job" : "jobs"}`;
   jobsList.replaceChildren();
@@ -369,6 +388,35 @@ function renderMatches(target: HTMLElement, matches: MatchedRequirement[]): void
   }
 }
 
+function renderBreakdown(analysis: JobAnalysisResult): void {
+  const list = element<HTMLElement>("#detail-breakdown");
+  const note = element<HTMLElement>("#detail-breakdown-note");
+  list.replaceChildren();
+  const breakdown = analysis.scoreBreakdown;
+  if (!breakdown) {
+    note.textContent = "Scored with the earlier method. Analyse again for an evidence breakdown.";
+    return;
+  }
+
+  const evidence = [
+    breakdown.professionalEvidence ? `${breakdown.professionalEvidence} work` : "",
+    breakdown.internshipEvidence ? `${breakdown.internshipEvidence} internship` : "",
+    breakdown.projectEvidence ? `${breakdown.projectEvidence} project` : ""
+  ].filter(Boolean).join(" · ");
+  const rows: Array<[string, string]> = [
+    ["Must-haves", `${breakdown.mustHaveMet}/${breakdown.mustHaveTotal}`],
+    ["Nice-to-haves", `${breakdown.preferredMet}/${breakdown.preferredTotal}`],
+    ...(evidence ? [["Evidence", evidence] as [string, string]] : [])
+  ];
+  for (const [label, value] of rows) {
+    const item = document.createElement("li");
+    item.append(createTextElement("span", "", label), createTextElement("strong", "", value));
+    list.append(item);
+  }
+  note.textContent = [breakdown.capReason, breakdown.confidence === "Low" ? "Few explicit requirements, so this score is less certain." : ""]
+    .filter(Boolean).join(" ");
+}
+
 function renderGaps(target: HTMLElement, gaps: RequirementGap[]): void {
   target.replaceChildren();
   if (gaps.length === 0) {
@@ -428,6 +476,7 @@ async function openJob(id: string, scroll = true): Promise<void> {
 
     element<HTMLElement>("#detail-role-summary").textContent = job.analysis.englishSummary || "No role summary was returned.";
     element<HTMLElement>("#detail-assessment").textContent = [job.analysis.summary, job.analysis.rationale].filter(Boolean).join(" ");
+    renderBreakdown(job.analysis);
     renderMatches(element<HTMLElement>("#detail-matches"), job.analysis.matchedRequirements || []);
     renderGaps(element<HTMLElement>("#detail-gaps"), job.analysis.gaps || []);
     renderStrings(element<HTMLElement>("#detail-questions"), job.analysis.questionsToVerify || [], "No extra questions returned.");
@@ -1121,6 +1170,7 @@ for (const link of navLinks) {
 
 jobSearch.addEventListener("input", renderJobs);
 statusFilter.addEventListener("change", renderJobs);
+sortOrder.addEventListener("change", renderJobs);
 refreshButton.addEventListener("click", () => void loadJobs());
 
 void initAuth(API_BASE_URL, () => void loadJobs());

@@ -505,18 +505,18 @@ function Get-QualityIssues {
         }
     }
 
-    # The score exposed by the API must agree with its calibration breakdown.
+    # The score exposed by the API must agree with its evidence breakdown.
     $rationale = [string]$Result.rationale
     $calibrationMatch = [regex]::Match(
         $rationale,
-        'Score calibration:\s*model estimate\s*(\d+)/100;.*?calibrated score\s*(\d+)/100',
+        'Fit score\s*(\d+)/100 from the evidence',
         [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
     )
 
-    if (-not $calibrationMatch.Success) {
-        $issues.Add("MISSING_SCORE_BREAKDOWN: rationale did not contain a parseable calibration breakdown.")
-    } elseif ([int]$calibrationMatch.Groups[2].Value -ne [int]$Result.matchScore) {
-        $issues.Add("SCORE_BREAKDOWN_MISMATCH: API score $($Result.matchScore) differs from the rationale's calibrated score $($calibrationMatch.Groups[2].Value).")
+    if (-not $calibrationMatch.Success -or $null -eq $Result.scoreBreakdown) {
+        $issues.Add("MISSING_SCORE_BREAKDOWN: the response did not contain a parseable evidence breakdown.")
+    } elseif ([int]$calibrationMatch.Groups[1].Value -ne [int]$Result.matchScore) {
+        $issues.Add("SCORE_BREAKDOWN_MISMATCH: API score $($Result.matchScore) differs from the rationale's fit score $($calibrationMatch.Groups[1].Value).")
     }
 
     if ([int]$Result.matchScore -lt 0 -or [int]$Result.matchScore -gt 100) {

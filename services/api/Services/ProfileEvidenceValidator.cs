@@ -26,7 +26,8 @@ public static class ProfileEvidenceValidator
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex LanguageRequirement = new(
-        @"\b(?:language|German|Deutsch|English|Englisch|CEFR|proficiency|C2|C1|B2|B1|A2|A1)\b",
+        // Spoken languages only: "programming/scripting/query language" and "proficiency in C#" are skills.
+        @"\b(?:(?<!(?:programming|scripting|query|markup)\s)languages?|German|Deutsch|English|Englisch|CEFR|C2|C1|B2|B1|A2|A1)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex ExplicitProfessionalExperience = new(
@@ -45,7 +46,23 @@ public static class ProfileEvidenceValidator
         var facts = ProfileEvidenceCatalog.Create(profile)
             .ToDictionary(fact => fact.Id, StringComparer.OrdinalIgnoreCase);
         var validMatches = new List<MatchedRequirement>();
+        var unprovenGaps = new List<RequirementGap>();
         var warnings = new List<string>();
+
+        // A requirement the model matched without valid evidence still exists in the vacancy, so it
+        // becomes an unverified gap instead of disappearing (which would inflate the fit score).
+        void Downgrade(MatchedRequirement match, string reason)
+        {
+            warnings.Add($"'{match.Requirement.Trim()}' {reason}");
+            unprovenGaps.Add(new RequirementGap
+            {
+                Requirement = match.Requirement.Trim(),
+                Severity = string.IsNullOrWhiteSpace(match.Importance) ? "Unknown" : match.Importance,
+                Status = "Unverified",
+                VacancyQuote = match.VacancyQuote,
+                Explanation = "Your profile facts do not clearly establish this yet."
+            });
+        }
 
         foreach (var match in result.MatchedRequirements ?? [])
         {
@@ -67,7 +84,7 @@ public static class ProfileEvidenceValidator
 
             if (suppliedIds.Count == 0 || citedFacts.Count == 0)
             {
-                warnings.Add($"'{match.Requirement.Trim()}' was removed because it cited no valid profile fact.");
+                Downgrade(match, "cited no valid profile fact, so it is treated as unverified.");
                 continue;
             }
 
@@ -83,7 +100,7 @@ public static class ProfileEvidenceValidator
 
             if (relevantFacts.Count == 0)
             {
-                warnings.Add($"'{match.Requirement.Trim()}' was removed because its cited facts do not establish that type of requirement.");
+                Downgrade(match, "is treated as unverified because its cited facts do not establish that type of requirement.");
                 continue;
             }
 
@@ -93,14 +110,36 @@ public static class ProfileEvidenceValidator
         }
 
         result.MatchedRequirements = validMatches;
+        result.Gaps = [.. (result.Gaps ?? []), .. unprovenGaps];
         result.EvidenceValidationWarnings = warnings.Distinct(StringComparer.Ordinal).ToList();
+    }
 
-        if (result.EvidenceValidationWarnings.Count > 0)
+    /// <summary>
+    /// A model-generated Unmet gap must cite the profile facts that contradict the requirement. Without a
+    /// valid contradicting fact the requirement is merely absent from the profile, so it becomes Unverified.
+    /// Run this on raw model output, before deterministic rules add their own Unmet gaps.
+    /// </summary>
+    public static void RequireConflictEvidence(CandidateProfile profile, JobAnalysisResult result)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(result);
+
+        var factIds = ProfileEvidenceCatalog.Create(profile)
+            .Select(fact => fact.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var gap in result.Gaps ?? [])
         {
-            result.Recommendation = "Review";
-            result.Rationale = AppendOnce(
-                result.Rationale,
-                "One or more AI-generated matches failed profile-fact validation and were removed or restricted. Review the evidence warnings before relying on the recommendation.");
+            if (gap is null || !string.Equals(gap.Status, "Unmet", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            gap.ConflictEvidenceIds = (gap.ConflictEvidenceIds ?? []).Where(factIds.Contains).ToList();
+            if (gap.ConflictEvidenceIds.Count == 0)
+            {
+                gap.Status = "Unverified";
+            }
         }
     }
 
@@ -147,14 +186,10 @@ public static class ProfileEvidenceValidator
             "professional_experience",
             "internship_experience",
             "project_academic_skill",
-            "personal_project");
+            "personal_project",
+            "candidate_note");
     }
 
     private static HashSet<string> Set(params string[] categories) =>
         new(categories, StringComparer.OrdinalIgnoreCase);
-
-    private static string AppendOnce(string? text, string addition) =>
-        !string.IsNullOrWhiteSpace(text) && text.Contains(addition, StringComparison.OrdinalIgnoreCase)
-            ? text
-            : string.IsNullOrWhiteSpace(text) ? addition : $"{text.TrimEnd()} {addition}";
 }

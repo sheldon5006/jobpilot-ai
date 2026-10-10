@@ -328,3 +328,11 @@ body.signed-out .app-shell { display: none; }
   .topbar-actions { width: 100%; justify-content: space-between; }
   .text-button { padding: 10px 4px; font-size: 13px; }
 }
+
+/* Score breakdown */
+.detail-breakdown { display: grid; gap: 5px; margin: 14px 0 0; padding: 0; list-style: none; }
+.detail-breakdown li { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; }
+.detail-breakdown strong { color: #243049; }
+.detail-breakdown-note { margin: 8px 0 0; color: #8a5a1f; font-size: 10px; line-height: 1.45; }
+.detail-breakdown-note:empty { display: none; }
+#sort-order { flex: 0 0 auto; }

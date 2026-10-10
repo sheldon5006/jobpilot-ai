@@ -430,7 +430,8 @@ public static class JobRequirementRuleEngine
                 result.MatchedRequirements.Add(BuildExperienceMatch(
                     profile,
                     label,
-                    candidateMonths!.Value));
+                    candidateMonths!.Value,
+                    severity));
                 continue;
             }
 
@@ -603,7 +604,8 @@ public static class JobRequirementRuleEngine
     private static MatchedRequirement BuildExperienceMatch(
         CandidateProfile profile,
         string requirement,
-        int months)
+        int months,
+        string importance)
     {
         var catalog = ProfileEvidenceCatalog.Create(profile);
         var professionalHistory = (profile.Experience ?? [])
@@ -631,6 +633,7 @@ public static class JobRequirementRuleEngine
         return new MatchedRequirement
         {
             Requirement = requirement,
+            Importance = importance,
             Evidence = string.Join(" ", facts.Select(fact => fact.Text)),
             EvidenceIds = facts.Select(fact => fact.Id).ToList()
         };
@@ -929,7 +932,8 @@ public static class JobRequirementRuleEngine
                 $"{language} proficiency",
                 "language",
                 fact => fact.Text.StartsWith($"{language}:", StringComparison.OrdinalIgnoreCase) &&
-                        fact.Text.EndsWith(proficiency.Split(';', 2)[0].Trim(), StringComparison.OrdinalIgnoreCase)));
+                        fact.Text.EndsWith(proficiency.Split(';', 2)[0].Trim(), StringComparison.OrdinalIgnoreCase),
+            "Preferred"));
             result.Summary = AppendText(result.Summary,
                 $"{language} proficiency is supported by the candidate profile.");
             result.Rationale = AppendText(result.Rationale,
@@ -1106,7 +1110,8 @@ public static class JobRequirementRuleEngine
         CandidateProfile profile,
         string requirement,
         string category,
-        Func<ProfileEvidenceFact, bool> predicate)
+        Func<ProfileEvidenceFact, bool> predicate,
+        string importance = "Must-have")
     {
         var facts = ProfileEvidenceCatalog.Create(profile)
             .Where(fact => string.Equals(fact.Category, category, StringComparison.OrdinalIgnoreCase))
@@ -1116,6 +1121,7 @@ public static class JobRequirementRuleEngine
         return new MatchedRequirement
         {
             Requirement = requirement,
+            Importance = importance,
             Evidence = string.Join(" ", facts.Select(fact => fact.Text)),
             EvidenceIds = facts.Select(fact => fact.Id).ToList()
         };
