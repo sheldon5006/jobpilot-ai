@@ -35,6 +35,18 @@ jobs:
         run: dotnet test services/api.tests/JobPilot.Api.Tests.csproj --configuration Release
 
 
+  api-docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API container image (as deployed on Render)
+        run: docker build -t jobpilot-api:ci services/api
+      - name: Refuses to start publicly without sign-in configured
+        run: |
+          if docker run --rm -e PORT=10000 jobpilot-api:ci; then
+            echo "The API started without auth on a public address." && exit 1
+          fi
+
   dashboard-build:
     runs-on: ubuntu-latest
     defaults:

@@ -15,6 +15,7 @@ interface CandidateProfile {
   professionalSkills: string[];
   projectAndAcademicSkills: string[];
   experience: Array<{ role: string; period: string; evidence: string[] }>;
+  projects?: Array<{ name: string; context: string; url: string; description: string; highlights: string[]; technologies: string[] }>;
   education: string[];
   languages: Array<{ language: string; proficiency: string }>;
   workAuthorization: string;
@@ -91,6 +92,14 @@ function renderProfile(profile: CandidateProfile): void {
     return rows;
   });
 
+  const projectRows = (profile.projects ?? []).flatMap(project => {
+    const rows = [copyRow(project.context || "Project", [project.name, project.url].filter(Boolean).join(" · "))];
+    const details = [project.description, ...project.highlights.map(line => `• ${line}`)].filter(Boolean).join("\n");
+    if (details) rows.push(copyRow("Description", details, true));
+    if (project.technologies.length > 0) rows.push(copyRow("Technologies", project.technologies.join(", ")));
+    return rows;
+  });
+
   const skills = [...profile.professionalSkills];
   const languages = profile.languages.map(item => item.proficiency ? `${item.language} — ${item.proficiency}` : item.language);
 
@@ -102,6 +111,7 @@ function renderProfile(profile: CandidateProfile): void {
     section("Work authorisation", profile.workAuthorization ? [copyRow("Right to work", profile.workAuthorization, true)] : []),
     section("Languages", languages.map(value => copyRow("Language", value))),
     section("Experience", experienceRows),
+    section("Projects", projectRows),
     section("Skills", [
       ...(skills.length > 0 ? [copyRow("Professional skills", skills.join(", "), true)] : []),
       ...(profile.projectAndAcademicSkills.length > 0

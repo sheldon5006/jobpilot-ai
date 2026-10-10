@@ -146,7 +146,8 @@ public static class ProfileEvidenceValidator
             "professional_skill",
             "professional_experience",
             "internship_experience",
-            "project_academic_skill");
+            "project_academic_skill",
+            "personal_project");
     }
 
     private static HashSet<string> Set(params string[] categories) =>

@@ -816,3 +816,47 @@ select {
 .ask-answer-area { display: grid; gap: 6px; margin-top: 10px; }
 .ask-answer-area textarea { min-height: 150px; }
 .cv-editor[hidden], .ask-answer-area[hidden] { display: none; }
+.cv-project-name { font-size: 11px; }
+#cv-projects-title[hidden] { display: none; }
+
+/* Responsive and touch fixes */
+.tool-card > .primary-button,
+.tool-card .ask-answer-area .secondary-button { width: 100%; }
+.tab-button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 480px) {
+  .cv-role-header { grid-template-columns: minmax(0, 1fr); }
+  .ask-options { flex-direction: column; align-items: stretch; }
+  .select-label { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+  .tool-card { padding: 11px; }
+}
+
+@media (max-width: 340px) {
+  .button-row { grid-template-columns: minmax(0, 1fr); }
+  .tab-button { font-size: 10px; }
+}
+
+/* Touch screens (phones, tablets, touch laptops): larger targets, no zoom-on-focus. */
+@media (pointer: coarse) {
+  input, textarea, select { font-size: 16px; }
+  input, select { min-height: 44px; }
+  .tab-button { min-height: 40px; font-size: 12px; }
+  .primary-button, .secondary-button { min-height: 46px; font-size: 13px; }
+  .header-toggle-button { min-height: 36px; }
+  .link-button { padding: 8px 0; font-size: 12px; }
+  .copy-row { padding: 11px 12px; }
+  .copy-row-value { font-size: 14px; }
+  .copy-row.multiline .copy-row-value { font-size: 13px; }
+  .copy-row-hint { font-size: 11px; }
+  .prompt-layer summary { padding: 6px 0; font-size: 13px; }
+  .setting-row input[type="checkbox"] { width: 20px; height: 20px; }
+}
+.cv-role-header textarea[data-field="role"] { min-height: 0; height: auto; padding: 7px 11px; resize: none; font-weight: 700; line-height: 1.35; }
+
+/* Sign-in */
+#app-content[hidden], .signin-panel[hidden], .account-row[hidden] { display: none; }
+.signin-panel h2 { margin: 0 0 4px; font-size: 16px; }
+.signin-panel .primary-button { width: 100%; }
+.redirect-uri { display: block; margin-top: 6px; padding: 7px 8px; border-radius: 6px; background: #eef2fb; font-size: 10px; overflow-wrap: anywhere; user-select: all; }
+.account-row { margin: 16px 0 0; color: #74819a; font-size: 10px; overflow-wrap: anywhere; }
+.account-row strong { color: #3a4760; }

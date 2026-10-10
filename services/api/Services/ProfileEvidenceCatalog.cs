@@ -69,6 +69,28 @@ public static class ProfileEvidenceCatalog
             }
         }
 
+        foreach (var project in profile.Projects ?? [])
+        {
+            if (project is null || string.IsNullOrWhiteSpace(project.Name))
+            {
+                continue;
+            }
+
+            var source = $"Project — {project.Name.Trim()}";
+            Add("PJT", "personal_project", source, string.IsNullOrWhiteSpace(project.Description)
+                ? string.Empty
+                : $"{project.Name.Trim()}: {project.Description.Trim()}");
+            foreach (var highlight in project.Highlights ?? [])
+            {
+                Add("PJT", "personal_project", source, highlight);
+            }
+
+            if ((project.Technologies?.Count ?? 0) > 0)
+            {
+                Add("PJT", "personal_project", source, $"{project.Name.Trim()} technologies: {string.Join(", ", project.Technologies!)}");
+            }
+        }
+
         foreach (var education in profile.Education ?? [])
         {
             Add("EDU", "education", "Education", education);

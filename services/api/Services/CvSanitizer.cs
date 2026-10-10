@@ -87,6 +87,38 @@ public static class CvSanitizer
 
         experience.Sort((left, right) => left.SourceIndex.CompareTo(right.SourceIndex));
 
+        // Projects are selected per job (the model may leave some out), but their facts come from the profile.
+        var profileProjects = profile.Projects ?? [];
+        var projects = new List<CvProject>();
+        var seenProjects = new HashSet<int>();
+        foreach (var entry in raw.Projects ?? [])
+        {
+            if (entry is null ||
+                entry.SourceIndex < 0 ||
+                entry.SourceIndex >= profileProjects.Count ||
+                !seenProjects.Add(entry.SourceIndex))
+            {
+                continue;
+            }
+
+            var source = profileProjects[entry.SourceIndex];
+            var bullets = CleanBullets(entry.Bullets).Take(4).ToList();
+            projects.Add(new CvProject
+            {
+                SourceIndex = entry.SourceIndex,
+                Name = source.Name?.Trim() ?? string.Empty,
+                Context = source.Context?.Trim() ?? string.Empty,
+                Url = source.Url?.Trim() ?? string.Empty,
+                Bullets = bullets.Count > 0 ? bullets : CleanBullets(source.Highlights).Take(3).ToList(),
+                Technologies = CleanList(source.Technologies)
+            });
+
+            if (projects.Count == 4)
+            {
+                break;
+            }
+        }
+
         var headline = Clip(raw.Headline, 140);
         if (headline.Length == 0)
         {
@@ -105,6 +137,7 @@ public static class CvSanitizer
             Summary = summary,
             SkillGroups = skillGroups,
             Experience = experience,
+            Projects = projects,
             Education = CleanList(profile.Education),
             Languages = (profile.Languages ?? [])
                 .Where(item => item is not null && !string.IsNullOrWhiteSpace(item.Language))
@@ -148,6 +181,20 @@ public static class CvSanitizer
                 })
                 .Where(entry => entry.Role.Length > 0 || entry.Bullets.Count > 0)
                 .Take(50)
+                .ToList(),
+            Projects = (cv.Projects ?? [])
+                .Where(project => project is not null)
+                .Select(project => new CvProject
+                {
+                    SourceIndex = project.SourceIndex,
+                    Name = Clip(project.Name, 160),
+                    Context = Clip(project.Context, 160),
+                    Url = Clip(project.Url, 300),
+                    Bullets = CleanList(project.Bullets).Select(bullet => Clip(bullet, 1000)).Take(10).ToList(),
+                    Technologies = CleanList(project.Technologies).Take(40).ToList()
+                })
+                .Where(project => project.Name.Length > 0)
+                .Take(10)
                 .ToList(),
             Education = CleanList(cv.Education).Take(30).ToList(),
             Languages = CleanList(cv.Languages).Take(30).ToList(),

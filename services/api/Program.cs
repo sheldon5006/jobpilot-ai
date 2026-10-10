@@ -3,15 +3,59 @@ using System.Text.Json;
 using JobPilot.Api.Data;
 using JobPilot.Api.Models;
 using JobPilot.Api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
+
+if (args.Length > 0 && args[0] == "copy-database")
+{
+    // One-off migration, e.g. local SQLite history into a hosted Neon database.
+    return await DatabaseCopier.RunAsync(args[1..]);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Local-only settings file. Keep appsettings.Local.json untracked; never commit real API keys.
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
-var databaseProvider = builder.Configuration["Database:Provider"] ?? "Sqlite";
+// Hosting platforms such as Render assign the port through PORT.
+var platformPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(platformPort) && string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{platformPort}");
+}
+
+var listenUrls = builder.Configuration["urls"];
+if (string.IsNullOrWhiteSpace(listenUrls))
+{
+    listenUrls = !string.IsNullOrWhiteSpace(platformPort)
+        ? $"http://0.0.0.0:{platformPort}"
+        : !string.IsNullOrWhiteSpace(builder.Configuration["http_ports"]) || !string.IsNullOrWhiteSpace(builder.Configuration["https_ports"])
+            ? "http://*:" + (builder.Configuration["http_ports"] ?? builder.Configuration["https_ports"])
+            : null;
+}
+
+var authSettings = AuthSettings.Resolve(builder.Configuration, listenUrls);
+builder.Services.AddSingleton(authSettings);
+builder.Services.AddSingleton<AuthService>();
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new AuthService(authSettings).ValidationParameters();
+    });
+builder.Services.AddAuthorization(options =>
+{
+    if (authSettings.Enabled)
+    {
+        // Every endpoint requires a signed-in session unless it explicitly allows anonymous access.
+        options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+    }
+});
+
+var databaseProvider = builder.Configuration["Database:Provider"]
+    ?? (string.IsNullOrWhiteSpace(builder.Configuration["DATABASE_URL"]) ? "Sqlite" : "Postgres");
 if (databaseProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase) ||
     databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
 {
@@ -104,11 +148,52 @@ var app = builder.Build();
 await EnsureDatabaseReadyAsync(app.Services, builder.Environment, builder.Configuration);
 
 app.UseCors("LocalDbotExtension");
+app.UseAuthentication();
+app.UseAuthorization();
+
+if (!authSettings.Enabled)
+{
+    app.Logger.LogWarning("Sign-in is disabled because Auth settings are not configured. This is only allowed on localhost.");
+}
 
 app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "ok",
     service = "JobPilot.Api"
+})).AllowAnonymous();
+
+// Tells the dashboard and DBot whether sign-in is needed, and which Google client to use.
+app.MapGet("/api/auth/config", (AuthSettings settings) => Results.Ok(new
+{
+    enabled = settings.Enabled,
+    googleClientId = settings.Enabled ? settings.GoogleClientId : null
+})).AllowAnonymous();
+
+app.MapPost("/api/auth/google", async (GoogleSignInRequest request, AuthSettings settings, AuthService auth) =>
+{
+    if (!settings.Enabled)
+    {
+        return Results.Problem(title: "Sign-in is not enabled on this API.", statusCode: StatusCodes.Status404NotFound);
+    }
+
+    if (string.IsNullOrWhiteSpace(request.IdToken) || request.IdToken.Length > 8000)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["idToken"] = ["A Google ID token is required."] });
+    }
+
+    var email = await auth.ValidateGoogleIdTokenAsync(request.IdToken);
+    return email is null
+        ? Results.Problem(
+            title: "This Google account is not allowed",
+            detail: "Sign in with the Google account configured for this JobPilot.",
+            statusCode: StatusCodes.Status403Forbidden)
+        : Results.Ok(auth.CreateSession(email));
+}).AllowAnonymous();
+
+app.MapGet("/api/auth/me", (HttpContext context, AuthSettings settings) => Results.Ok(new
+{
+    enabled = settings.Enabled,
+    email = context.User.FindFirst("email")?.Value ?? context.User.FindFirst("sub")?.Value
 }));
 
 app.MapGet("/api/profile", async (JobPilotDbContext database, CancellationToken cancellationToken) =>
@@ -462,7 +547,7 @@ app.MapPost("/api/jobs/analyze", AnalyzeJobAsync);
 app.MapGet("/api/cv/default-instructions", () => Results.Ok(new
 {
     instructions = ApplicationWritingService.DefaultCvInstructions
-}));
+})).AllowAnonymous();
 
 app.MapPost("/api/jobs/{id:guid}/generated-cv", async (
     Guid id,
@@ -593,8 +678,9 @@ app.MapDelete("/api/jobs/{id:guid}/generated-cv", async (
     return Results.NoContent();
 });
 
-app.MapGet("/api/jobs/{id:guid}/generated-cv/docx", async (
+app.MapGet("/api/jobs/{id:guid}/generated-cv/{format:regex(^(pdf|docx)$)}", async (
     Guid id,
+    string format,
     JobPilotDbContext database,
     CancellationToken cancellationToken) =>
 {
@@ -608,11 +694,15 @@ app.MapGet("/api/jobs/{id:guid}/generated-cv/docx", async (
 
     var (profile, _) = await LoadCompleteProfileAsync(database, cancellationToken);
     var contact = profile?.Contact ?? new ContactDetails();
-    var bytes = CvDocxBuilder.Build(contact, DeserializeCv(generated.CvJson));
-    return Results.File(
-        bytes,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        BuildCvFileName(contact.FullName, generated.Job.Company, generated.Job.JobTitle));
+    var cv = DeserializeCv(generated.CvJson);
+    var fileName = BuildCvFileName(contact.FullName, generated.Job.Company, generated.Job.JobTitle);
+
+    return format == "pdf"
+        ? Results.File(CvPdfBuilder.Build(contact, cv), "application/pdf", $"{fileName}.pdf")
+        : Results.File(
+            CvDocxBuilder.Build(contact, cv),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            $"{fileName}.docx");
 });
 
 app.MapPost("/api/assistant/answer", async (
@@ -676,7 +766,8 @@ app.MapPost("/api/assistant/answer", async (
     });
 });
 
-app.Run();
+await app.RunAsync();
+return 0;
 
 static async Task<(CandidateProfile? Profile, IResult? Problem)> LoadCompleteProfileAsync(
     JobPilotDbContext database,
@@ -822,7 +913,7 @@ static string BuildCvFileName(string? fullName, string? company, string? jobTitl
         name = name[..120].TrimEnd();
     }
 
-    return $"{(name.Length == 0 ? "CV" : name)}.docx";
+    return name.Length == 0 ? "CV" : name;
 }
 
 static string GetPostgresConnectionString(IConfiguration configuration)
@@ -840,33 +931,7 @@ static string GetPostgresConnectionString(IConfiguration configuration)
             "PostgreSQL was selected, but ConnectionStrings:JobPilot or DATABASE_URL is not configured.");
     }
 
-    // Managed platforms such as Render and Neon commonly provide a PostgreSQL URI.
-    if (!Uri.TryCreate(databaseUrl, UriKind.Absolute, out var uri) ||
-        !(uri.Scheme.Equals("postgres", StringComparison.OrdinalIgnoreCase) ||
-          uri.Scheme.Equals("postgresql", StringComparison.OrdinalIgnoreCase)))
-    {
-        // Also accept the standard ADO.NET key/value connection-string format.
-        return databaseUrl;
-    }
-
-    var credentials = uri.UserInfo.Split(':', 2);
-    if (credentials.Length != 2)
-    {
-        throw new InvalidOperationException("DATABASE_URL must include a PostgreSQL username and password.");
-    }
-
-    return new NpgsqlConnectionStringBuilder
-    {
-        Host = uri.Host,
-        Port = uri.IsDefaultPort ? 5432 : uri.Port,
-        Database = Uri.UnescapeDataString(uri.AbsolutePath.Trim('/')),
-        Username = Uri.UnescapeDataString(credentials[0]),
-        Password = Uri.UnescapeDataString(credentials[1]),
-        SslMode = SslMode.Require,
-        Timeout = 15,
-        CommandTimeout = 30,
-        Pooling = true
-    }.ConnectionString;
+    return PostgresConnection.FromUrl(databaseUrl);
 }
 
 static async Task<IResult> AnalyzeJobAsync(
@@ -1210,6 +1275,19 @@ static Dictionary<string, string[]> ValidateCandidateProfile(CandidateProfile pr
         (item.Language?.Length ?? 0) > 100 || (item.Proficiency?.Length ?? 0) > 160))
         AddError("languageEntry", "Language names must be 100 characters or fewer and proficiency descriptions 160 characters or fewer.");
 
+    if ((profile.Projects?.Count ?? 0) > 30)
+        AddError("projects", "The profile can contain at most 30 projects.");
+    if ((profile.Projects ?? []).Any(item =>
+        (item.Name?.Length ?? 0) > 160 ||
+        (item.Context?.Length ?? 0) > 160 ||
+        (item.Url?.Length ?? 0) > 300 ||
+        (item.Description?.Length ?? 0) > 2000 ||
+        (item.Highlights?.Count ?? 0) > 20 ||
+        (item.Highlights ?? []).Any(highlight => (highlight?.Length ?? 0) > 1000) ||
+        (item.Technologies?.Count ?? 0) > 40 ||
+        (item.Technologies ?? []).Any(technology => (technology?.Length ?? 0) > 100)))
+        AddError("projectEntry", "Each project needs a name and context of 160 characters or fewer, a URL of 300 or fewer, a description of 2,000 or fewer, up to 20 highlights of 1,000 characters and up to 40 technologies.");
+
     var contact = profile.Contact ?? new ContactDetails();
     if (new[] { contact.FullName, contact.Email, contact.Phone, contact.Location, contact.LinkedIn, contact.Website }
         .Any(value => (value?.Length ?? 0) > 200))
@@ -1239,6 +1317,19 @@ static CandidateProfile NormalizeCandidateProfile(CandidateProfile profile)
                 Evidence = CleanList(item.Evidence)
             })
             .Where(item => item.Role.Length > 0 || item.Period.Length > 0 || item.Evidence.Count > 0)
+            .ToList(),
+        Projects = (profile.Projects ?? [])
+            .Where(item => item is not null)
+            .Select(item => new ProjectEntry
+            {
+                Name = Clean(item.Name),
+                Context = Clean(item.Context),
+                Url = Clean(item.Url),
+                Description = Clean(item.Description),
+                Highlights = CleanList(item.Highlights),
+                Technologies = CleanList(item.Technologies)
+            })
+            .Where(item => item.Name.Length > 0)
             .ToList(),
         Education = CleanList(profile.Education),
         Languages = (profile.Languages ?? [])

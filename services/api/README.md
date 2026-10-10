@@ -115,7 +115,7 @@ SQLite is intended for local development. To use PostgreSQL, set `Database:Provi
 
 The initial schema is created with EF Core `EnsureCreated` for this prototype. Once the schema needs versioned upgrades, add EF Core migrations before evolving the deployed database.
 
-**Security before public deployment:** the current saved-job endpoints do not have sign-in or user-level authorization. Do not expose this API publicly until API access is protected and the Gemini key and database credentials are configured as server-side secrets. Set `DASHBOARD_ORIGIN` to the exact HTTPS origin of the deployed dashboard for production CORS.
+**Access protection:** when the API listens on anything other than localhost, it requires Google sign-in restricted to `Auth:AllowedEmails`, and it refuses to start if `Auth:GoogleClientId`, `Auth:AllowedEmails` and `Auth:SigningKey` are missing. Keep the Gemini key, database credentials and signing key as server-side secrets. Set `DASHBOARD_ORIGIN` to the exact HTTPS origin of the deployed dashboard for production CORS. See `docs/deployment.md`.
 
 ## 4. Run the API
 
@@ -137,7 +137,7 @@ Invoke-RestMethod http://127.0.0.1:5080/api/health
 - `POST /api/jobs/analyze` — analyses a supplied job description against the saved candidate profile and saves the result.
 - `POST /api/jobs/{id}/cv`, `GET /api/jobs/{id}/cv`, `DELETE /api/jobs/{id}/cv` — upload, download, or remove the CV associated with one saved job.
 - `POST /api/jobs/{id}/generated-cv` — generate a tailored CV for a saved job (body: `{ "customInstructions": "…" }`). Moves a `Saved` job to `Attempt`.
-- `GET`, `PUT`, `DELETE /api/jobs/{id}/generated-cv` — read, save manual edits to, or delete the generated CV; `GET /api/jobs/{id}/generated-cv/docx` downloads it as Word.
+- `GET`, `PUT`, `DELETE /api/jobs/{id}/generated-cv` — read, save manual edits to, or delete the generated CV; `GET /api/jobs/{id}/generated-cv/pdf` downloads it as a PDF (rendered with QuestPDF under its Community licence) and `GET /api/jobs/{id}/generated-cv/docx` as an editable Word file.
 - `GET /api/cv/default-instructions` — the default, user-editable CV style instructions.
 - `POST /api/assistant/answer` — draft an answer to an application-form question (`question`, optional `jobId`/job fields, `length`: short, medium or long, `customInstructions`).
 
