@@ -81,6 +81,57 @@ public sealed class CvGenerationTests
     }
 
     [Fact]
+    public void SanitizerTakesProjectFactsFromTheProfileAndIgnoresUnknownProjects()
+    {
+        var profile = new CandidateProfile
+        {
+            ProfessionalSummary = "Engineer.",
+            ProfessionalSkills = ["C#"],
+            Projects =
+            [
+                new ProjectEntry
+                {
+                    Name = "FlowDesk",
+                    Context = "Personal project",
+                    Url = "github.com/example/FlowDesk",
+                    Highlights = ["Built a REST API."],
+                    Technologies = [".NET 10", "PostgreSQL"]
+                }
+            ]
+        };
+        var raw = new CvDocument
+        {
+            Projects =
+            [
+                new CvProject { SourceIndex = 0, Name = "Renamed", Technologies = ["Kubernetes"], Bullets = ["Built a scheduling REST API."] },
+                new CvProject { SourceIndex = 3, Name = "Invented project", Bullets = ["Did things."] }
+            ]
+        };
+
+        var cv = CvSanitizer.Apply(raw, profile);
+
+        var project = Assert.Single(cv.Projects);
+        Assert.Equal("FlowDesk", project.Name);
+        Assert.Equal("github.com/example/FlowDesk", project.Url);
+        Assert.Equal([".NET 10", "PostgreSQL"], project.Technologies);
+        Assert.Equal(["Built a scheduling REST API."], project.Bullets);
+    }
+
+    [Fact]
+    public void ProjectFactsAreNotProfessionalExperience()
+    {
+        var profile = new CandidateProfile
+        {
+            Projects = [new ProjectEntry { Name = "FlowDesk", Description = "Scheduling platform.", Highlights = ["Built a REST API."] }]
+        };
+
+        var facts = ProfileEvidenceCatalog.Create(profile);
+
+        Assert.NotEmpty(facts);
+        Assert.All(facts, fact => Assert.Equal("personal_project", fact.Category));
+    }
+
+    [Fact]
     public void AiProfileCopyExcludesContactDetails()
     {
         var copy = CreateProfile().WithoutContact();
@@ -88,6 +139,18 @@ public sealed class CvGenerationTests
         Assert.Equal(string.Empty, copy.Contact.FullName);
         Assert.Equal(string.Empty, copy.Contact.Email);
         Assert.Equal("Software engineer focused on .NET web applications.", copy.ProfessionalSummary);
+    }
+
+    [Fact]
+    public void PdfBuilderWritesAPdfDocument()
+    {
+        var profile = CreateProfile();
+        var cv = CvSanitizer.Apply(new CvDocument { Headline = "C# Developer", Summary = "Builds APIs → ships features." }, profile);
+
+        var bytes = CvPdfBuilder.Build(profile.Contact, cv);
+
+        Assert.True(bytes.Length > 1000);
+        Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(bytes, 0, 5));
     }
 
     [Fact]

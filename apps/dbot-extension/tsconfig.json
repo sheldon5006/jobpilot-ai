@@ -18,7 +18,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "types": [
-      "chrome"
+      "chrome",
+      "vite/client"
     ]
   },
   "include": [

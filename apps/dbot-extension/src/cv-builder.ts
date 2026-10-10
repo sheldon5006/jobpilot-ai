@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRequest, element, parseLines, setStatus } from "./shared";
+import { apiFetch, apiRequest, element, parseLines, setStatus } from "./shared";
 
 interface CvSkillGroup {
   category: string;
@@ -12,11 +12,21 @@ interface CvExperience {
   bullets: string[];
 }
 
+interface CvProject {
+  sourceIndex: number;
+  name: string;
+  context: string;
+  url: string;
+  bullets: string[];
+  technologies: string[];
+}
+
 interface CvDocument {
   headline: string;
   summary: string;
   skillGroups: CvSkillGroup[];
   experience: CvExperience[];
+  projects?: CvProject[];
   education: string[];
   languages: string[];
   certifications: string[];
@@ -50,11 +60,14 @@ const headlineInput = element<HTMLInputElement>("#cv-headline");
 const summaryInput = element<HTMLTextAreaElement>("#cv-summary");
 const skillsInput = element<HTMLTextAreaElement>("#cv-skills");
 const experienceEditor = element<HTMLElement>("#cv-experience-editor");
+const projectEditor = element<HTMLElement>("#cv-project-editor");
+const projectsTitle = element<HTMLElement>("#cv-projects-title");
 const educationInput = element<HTMLTextAreaElement>("#cv-education");
 const certificationsInput = element<HTMLTextAreaElement>("#cv-certifications");
 const languagesInput = element<HTMLTextAreaElement>("#cv-languages");
 const saveCvButton = element<HTMLButtonElement>("#save-cv-button");
 const downloadCvButton = element<HTMLButtonElement>("#download-cv-button");
+const downloadDocxButton = element<HTMLButtonElement>("#download-docx-button");
 
 let defaultInstructions = "";
 let currentCvJobId: string | null = null;
@@ -76,8 +89,9 @@ function fillEditor(cv: CvDocument): void {
     card.className = "cv-role-card";
     card.dataset.sourceIndex = String(entry.sourceIndex);
 
-    const role = document.createElement("input");
-    role.type = "text";
+    // A wrapping textarea so long "Role · Employer, City" titles stay readable on narrow screens.
+    const role = document.createElement("textarea");
+    role.rows = 2;
     role.maxLength = 160;
     role.value = entry.role;
     role.dataset.field = "role";
@@ -102,6 +116,29 @@ function fillEditor(cv: CvDocument): void {
     card.append(header, bullets);
     experienceEditor.append(card);
   }
+
+  // Name, link and technologies come from the profile; only the bullets are editable here.
+  projectEditor.replaceChildren();
+  const projects = cv.projects ?? [];
+  projectsTitle.hidden = projects.length === 0;
+  for (const project of projects) {
+    const card = document.createElement("div");
+    card.className = "cv-role-card cv-project-card";
+    card.dataset.project = JSON.stringify({ ...project, bullets: [] });
+
+    const title = document.createElement("strong");
+    title.className = "cv-project-name";
+    title.textContent = [project.name, project.context].filter(Boolean).join(" · ");
+
+    const bullets = document.createElement("textarea");
+    bullets.rows = Math.min(6, Math.max(2, project.bullets.length + 1));
+    bullets.value = project.bullets.join("\n");
+    bullets.dataset.field = "bullets";
+    bullets.setAttribute("aria-label", `${project.name} bullet points, one per line`);
+
+    card.append(title, bullets);
+    projectEditor.append(card);
+  }
 }
 
 function readEditor(): CvDocument {
@@ -118,6 +155,11 @@ function readEditor(): CvDocument {
       sourceIndex: Number(card.dataset.sourceIndex) || 0,
       role: card.querySelector<HTMLInputElement>('[data-field="role"]')?.value.trim() ?? "",
       period: card.querySelector<HTMLInputElement>('[data-field="period"]')?.value.trim() ?? "",
+      bullets: parseLines(card.querySelector<HTMLTextAreaElement>('[data-field="bullets"]')?.value ?? "")
+        .map(line => line.replace(/^[•*-]\s*/, ""))
+    })),
+    projects: Array.from(projectEditor.querySelectorAll<HTMLElement>(".cv-project-card")).map(card => ({
+      ...(JSON.parse(card.dataset.project || "{}") as CvProject),
       bullets: parseLines(card.querySelector<HTMLTextAreaElement>('[data-field="bullets"]')?.value ?? "")
         .map(line => line.replace(/^[•*-]\s*/, ""))
     })),
@@ -187,18 +229,19 @@ async function saveEdits(): Promise<boolean> {
   }
 }
 
-async function downloadDocx(): Promise<void> {
+async function downloadCv(format: "pdf" | "docx"): Promise<void> {
   if (!currentCvJobId) return;
   downloadCvButton.disabled = true;
+  downloadDocxButton.disabled = true;
   try {
     // Save first so the downloaded file includes any manual edits.
     if (!(await saveEdits())) return;
-    const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(currentCvJobId)}/generated-cv/docx`);
+    const response = await apiFetch(`/api/jobs/${encodeURIComponent(currentCvJobId)}/generated-cv/${format}`);
     if (!response.ok) throw new Error(`CV download failed with HTTP ${response.status}.`);
     const disposition = response.headers.get("Content-Disposition") || "";
     const fileName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
       ?? /filename="?([^";]+)"?/i.exec(disposition)?.[1]
-      ?? "CV.docx";
+      ?? `CV.${format}`;
     const objectUrl = URL.createObjectURL(await response.blob());
     const link = document.createElement("a");
     link.href = objectUrl;
@@ -212,6 +255,7 @@ async function downloadDocx(): Promise<void> {
     setStatus(cvStatus, error instanceof Error ? error.message : "The CV could not be downloaded.", "error");
   } finally {
     downloadCvButton.disabled = false;
+    downloadDocxButton.disabled = false;
   }
 }
 
@@ -220,6 +264,7 @@ export function resetCvBuilder(): void {
   currentCvJobId = null;
   cvEditor.hidden = true;
   experienceEditor.replaceChildren();
+  projectEditor.replaceChildren();
   jobInstructionsInput.value = "";
   makeCvLabel.textContent = "Make CV";
   setStatus(cvStatus, "");
@@ -260,5 +305,6 @@ export function initCvBuilder(dependencies: CvBuilderDependencies): void {
 
   makeCvButton.addEventListener("click", () => void makeCv(dependencies));
   saveCvButton.addEventListener("click", () => void saveEdits());
-  downloadCvButton.addEventListener("click", () => void downloadDocx());
+  downloadCvButton.addEventListener("click", () => void downloadCv("pdf"));
+  downloadDocxButton.addEventListener("click", () => void downloadCv("docx"));
 }

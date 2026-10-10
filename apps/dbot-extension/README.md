@@ -63,7 +63,7 @@ Successful analyses are saved to the API's shared saved-job history, which also 
 1. Load a job in the **Job** tab (fetch it or paste it).
 2. Optionally open **Customise CV prompt**. *Standing instructions* are saved in the extension and used for every CV; *extra instructions for this job* apply once. **Reset to default** restores the built-in instructions.
 3. Click **Make CV**. If the job hasn't been analysed yet, DBot analyses and saves it first, then generates the CV. A `Saved` job becomes an **Attempt** in the dashboard.
-4. Edit any section, then **Save edits** or **Download DOCX**. The CV is also available under the job in the dashboard.
+4. Edit any section, then **Save edits** or **Download PDF** (an editable Word file is also available). The CV is also available under the job in the dashboard.
 
 Truthfulness rules can't be overridden by your instructions. Role titles, dates, education, languages and certifications come straight from your profile. Skills that aren't in your profile are removed. AI-written bullet points can still over-state your experience, so check them before you send the CV.
 

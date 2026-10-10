@@ -274,3 +274,57 @@ input:focus, textarea:focus, select:focus { border-color: #6481ee; box-shadow: 0
 .generated-cv-preview p { margin: 0 0 6px; }
 .generated-cv-preview .generated-cv-role { margin: 8px 0 3px; font-weight: 700; }
 .generated-cv-preview ul { margin: 0 0 4px; padding-left: 18px; }
+.projects-view { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.project-story-card { min-width: 0; padding: 14px; border: 1px solid #e4e9f2; border-radius: 10px; background: #fbfcff; }
+.project-story-card h3 { margin: 0 0 4px; font-size: 13px; }
+.project-story-card p { margin: 8px 0; font-size: 11px; line-height: 1.5; }
+.project-story-card ul { margin: 0 0 10px; padding-left: 17px; color: #4a566c; font-size: 11px; line-height: 1.55; }
+@media (max-width: 760px) { .projects-view { grid-template-columns: 1fr; } }
+
+/* Mobile layout fixes */
+.jobs-list { grid-template-columns: minmax(0, 1fr); }
+.job-card { min-width: 0; }
+.job-card-title { min-width: 0; }
+.job-score { flex: 0 0 auto; }
+@media (max-width: 1180px) {
+  .content-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .nav-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; overflow: visible; }
+  .nav-item { flex-direction: column; justify-content: center; gap: 3px; padding: 8px 2px; font-size: 10px; text-align: center; white-space: normal; line-height: 1.2; }
+  .nav-glyph { font-size: 14px; }
+  .topbar { flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  .topbar h1 { font-size: 22px; }
+  .detail-summary-grid { gap: 12px; }
+  .details-heading { gap: 10px; }
+  .generated-cv-preview { max-height: 360px; padding: 14px; }
+  .projects-view { grid-template-columns: minmax(0, 1fr); }
+  .experience-edit-card { padding: 12px; }
+  /* 16px stops iOS Safari from zooming in when a field is focused. */
+  input, select, textarea { font-size: 16px; }
+}
+@media (max-width: 760px) {
+  .stats-grid .stat-card:last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 0; }
+  .sidebar { position: sticky; top: 0; z-index: 20; padding: 10px 12px 8px; background: var(--panel); box-shadow: 0 2px 10px #1e2a440d; }
+  .brand { padding: 0 2px 8px; }
+  #overview, #saved-jobs, #new-analysis, #job-details, #my-profile-page { scroll-margin-top: 125px; }
+}
+
+/* Sign-in */
+.signin-screen { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: radial-gradient(circle at 100% 0%, #4d7cfe1f, transparent 40%), var(--bg, #f5f7fb); }
+.signin-screen[hidden] { display: none; }
+body.signed-out .app-shell { display: none; }
+.signin-card { width: min(100%, 400px); padding: 30px 26px; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 12px 34px #1e2a4412; text-align: center; }
+.signin-card .brand-icon { margin: 0 auto 16px; }
+.signin-card h1 { margin: 0 0 8px; font-size: 22px; }
+.signin-card .muted { margin: 0 0 20px; font-size: 12px; line-height: 1.55; }
+.google-signin-button { display: flex; justify-content: center; min-height: 44px; }
+.signin-message { margin: 14px 0 0; color: #a23e3e; font-size: 12px; line-height: 1.5; }
+.topbar-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.account-info { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.account-info[hidden] { display: none; }
+.text-button { padding: 4px 2px; border: 0; color: #2e51cf; background: none; cursor: pointer; font-size: 11px; font-weight: 700; text-decoration: underline; }
+@media (max-width: 760px) {
+  .topbar-actions { width: 100%; justify-content: space-between; }
+  .text-button { padding: 10px 4px; font-size: 13px; }
+}

@@ -1,3 +1,5 @@
+import { authHeaders, initAuth, requireSignIn } from "./auth";
+
 interface MatchedRequirement {
   requirement: string;
   evidence: string;
@@ -65,6 +67,7 @@ interface CvDocument {
   summary: string;
   skillGroups: Array<{ category: string; skills: string[] }>;
   experience: Array<{ role: string; period: string; bullets: string[] }>;
+  projects?: Array<{ name: string; context: string; url: string; bullets: string[]; technologies: string[] }>;
   education: string[];
   languages: string[];
   certifications: string[];
@@ -93,6 +96,15 @@ interface ExperienceEntry {
   evidence: string[];
 }
 
+interface ProjectEntry {
+  name: string;
+  context: string;
+  url: string;
+  description: string;
+  highlights: string[];
+  technologies: string[];
+}
+
 interface LanguageEntry {
   language: string;
   proficiency: string;
@@ -104,6 +116,7 @@ interface CandidateProfile {
   professionalSkills: string[];
   projectAndAcademicSkills: string[];
   experience: ExperienceEntry[];
+  projects: ProjectEntry[];
   education: string[];
   languages: LanguageEntry[];
   workAuthorization: string;
@@ -171,6 +184,7 @@ const generatedCvInfo = element<HTMLElement>("#generated-cv-info");
 const generatedCvPreview = element<HTMLElement>("#generated-cv-preview");
 const generatedCvMessage = element<HTMLElement>("#generated-cv-message");
 const downloadGeneratedCvButton = element<HTMLButtonElement>("#download-generated-cv-button");
+const downloadGeneratedDocxButton = element<HTMLButtonElement>("#download-generated-docx-button");
 const deleteGeneratedCvButton = element<HTMLButtonElement>("#delete-generated-cv-button");
 const contactInputs = {
   fullName: element<HTMLInputElement>("#contact-name-input"),
@@ -189,6 +203,7 @@ const profileEditMessage = element<HTMLElement>("#profile-edit-message");
 const editProfileButton = element<HTMLButtonElement>("#edit-profile-button");
 const saveProfileButton = element<HTMLButtonElement>("#save-profile-button");
 const experienceEditor = element<HTMLElement>("#experience-editor");
+const projectEditor = element<HTMLElement>("#project-editor");
 const profileSummaryInput = element<HTMLTextAreaElement>("#profile-summary-input");
 const profileTargetRolesInput = element<HTMLTextAreaElement>("#profile-target-roles-input");
 const profileSkillsInput = element<HTMLTextAreaElement>("#profile-skills-input");
@@ -205,21 +220,36 @@ function setMessage(target: HTMLElement, message: string, kind: "error" | "succe
   target.hidden = !message;
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
+/** fetch() against the API with the session attached; a rejected session shows the sign-in screen. */
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   let response: Response;
-  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
-
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      headers: {
-        ...(isFormData ? {} : { "Content-Type": "application/json" }),
-        ...(init?.headers || {})
-      }
+      headers: { ...authHeaders(), ...(init?.headers || {}) }
     });
   } catch {
-    throw new Error(`Cannot reach the API at ${API_BASE_URL}. Start the API and try again.`);
+    throw new Error(API_BASE_URL.includes("127.0.0.1")
+      ? `Cannot reach the API at ${API_BASE_URL}. Start the API and try again.`
+      : "Cannot reach the API. The free server may be waking up, which can take about a minute; try again shortly.");
   }
+
+  if (response.status === 401) {
+    requireSignIn();
+    throw new Error("Sign in to continue.");
+  }
+  return response;
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const response = await apiFetch(path, {
+    ...init,
+    headers: {
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(init?.headers || {})
+    }
+  });
 
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -448,6 +478,15 @@ function renderGeneratedCvPreview(contact: ContactDetails, cv: CvDocument): void
       generatedCvPreview.append(list(role.bullets));
     }
   }
+  if ((cv.projects ?? []).length > 0) {
+    generatedCvPreview.append(heading("Selected projects"));
+    for (const project of cv.projects ?? []) {
+      generatedCvPreview.append(createTextElement("p", "generated-cv-role", [project.name, project.context].filter(Boolean).join(" · ")));
+      if (project.url) generatedCvPreview.append(createTextElement("p", "generated-cv-contact", project.url));
+      generatedCvPreview.append(list(project.bullets));
+      if (project.technologies.length > 0) generatedCvPreview.append(createTextElement("p", "generated-cv-contact", project.technologies.join(", ")));
+    }
+  }
   if (cv.education.length > 0) generatedCvPreview.append(heading("Education"), list(cv.education));
   if (cv.certifications.length > 0) generatedCvPreview.append(heading("Certifications"), list(cv.certifications));
   if (cv.languages.length > 0) generatedCvPreview.append(heading("Languages"), list(cv.languages));
@@ -548,6 +587,33 @@ function renderProfileStory(profile: CandidateProfile, updatedAtUtc: string): vo
     ].filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`),
     "Contact details not added yet."
   );
+  const projectsView = element<HTMLElement>("#projects-view");
+  projectsView.replaceChildren();
+  const projects = profile.projects ?? [];
+  if (projects.length === 0) {
+    projectsView.append(createTextElement("div", "career-story-empty", "No projects added yet. Add personal or academic projects to use them on tailored CVs."));
+  }
+  for (const project of projects) {
+    const card = document.createElement("article");
+    card.className = "project-story-card";
+    card.append(createTextElement("h3", "", project.name));
+    const meta = [project.context, project.url].filter(Boolean).join(" · ");
+    if (meta) card.append(createTextElement("span", "career-story-period", meta));
+    if (project.description) card.append(createTextElement("p", "muted", project.description));
+    if (project.highlights.length > 0) {
+      const highlights = document.createElement("ul");
+      project.highlights.forEach(item => highlights.append(createTextElement("li", "", item)));
+      card.append(highlights);
+    }
+    if (project.technologies.length > 0) {
+      const chips = document.createElement("div");
+      chips.className = "chip-list";
+      project.technologies.forEach(item => chips.append(createProfileChip(item)));
+      card.append(chips);
+    }
+    projectsView.append(card);
+  }
+
   renderStrings(element<HTMLElement>("#profile-education-view"), profile.education, "Education not added yet.");
   renderStrings(
     element<HTMLElement>("#profile-language-view"),
@@ -650,6 +716,86 @@ function renderExperienceEditor(entries: ExperienceEntry[]): void {
   entries.forEach((entry, index) => experienceEditor.append(createExperienceEditorCard(entry, index)));
 }
 
+function labelledField(label: string, control: HTMLInputElement | HTMLTextAreaElement): HTMLElement {
+  const field = document.createElement("div");
+  field.className = "field";
+  field.append(createTextElement("label", "", label), control);
+  return field;
+}
+
+function projectInput(value: string, field: string, maxLength: number, placeholder: string): HTMLInputElement {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = maxLength;
+  input.placeholder = placeholder;
+  input.value = value;
+  input.dataset.projectField = field;
+  return input;
+}
+
+function createProjectEditorCard(project: ProjectEntry, index: number): HTMLElement {
+  const card = document.createElement("article");
+  card.className = "experience-edit-card project-edit-card";
+
+  const heading = document.createElement("div");
+  heading.className = "experience-card-heading";
+  heading.append(createTextElement("strong", "", `Project ${index + 1}`));
+  const removeButton = createTextElement("button", "", "Remove project") as HTMLButtonElement;
+  removeButton.type = "button";
+  removeButton.dataset.removeProject = String(index);
+  heading.append(removeButton);
+
+  const grid = document.createElement("div");
+  grid.className = "profile-edit-grid";
+  grid.append(
+    labelledField("Project name", projectInput(project.name, "name", 160, "e.g. FlowDesk")),
+    labelledField("Context", projectInput(project.context, "context", 160, "e.g. Personal project · in progress")),
+    labelledField("Link", projectInput(project.url, "url", 300, "github.com/…")),
+    labelledField("Technologies · comma separated", projectInput(project.technologies.join(", "), "technologies", 2000, ".NET 10, PostgreSQL, Angular"))
+  );
+
+  const description = document.createElement("textarea");
+  description.rows = 2;
+  description.maxLength = 2000;
+  description.placeholder = "One sentence on what the project is.";
+  description.value = project.description;
+  description.dataset.projectField = "description";
+
+  const highlights = document.createElement("textarea");
+  highlights.rows = 4;
+  highlights.maxLength = 12000;
+  highlights.placeholder = "What you built, one per line";
+  highlights.value = formatLines(project.highlights);
+  highlights.dataset.projectField = "highlights";
+
+  card.append(heading, grid, labelledField("Description", description), labelledField("Highlights · one per line", highlights));
+  return card;
+}
+
+function readProjectEditor(): ProjectEntry[] {
+  const value = (card: HTMLElement, field: string) =>
+    card.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-project-field="${field}"]`)?.value.trim() ?? "";
+  return Array.from(projectEditor.querySelectorAll<HTMLElement>(".project-edit-card"))
+    .map(card => ({
+      name: value(card, "name"),
+      context: value(card, "context"),
+      url: value(card, "url"),
+      description: value(card, "description"),
+      highlights: parseLines(value(card, "highlights")),
+      technologies: value(card, "technologies").split(",").map(item => item.trim()).filter(Boolean)
+    }))
+    .filter(project => project.name || project.description || project.highlights.length > 0);
+}
+
+function renderProjectEditor(projects: ProjectEntry[]): void {
+  projectEditor.replaceChildren();
+  if (projects.length === 0) {
+    projectEditor.append(createTextElement("p", "career-story-empty", "No projects added yet. Choose Add project to create one."));
+    return;
+  }
+  projects.forEach((project, index) => projectEditor.append(createProjectEditorCard(project, index)));
+}
+
 function fillProfileEditor(profile: CandidateProfile): void {
   profileSummaryInput.value = profile.professionalSummary;
   profileTargetRolesInput.value = formatLines(profile.targetRoles);
@@ -667,6 +813,7 @@ function fillProfileEditor(profile: CandidateProfile): void {
     contactInputs[key].value = contact[key] ?? "";
   }
   renderExperienceEditor(profile.experience);
+  renderProjectEditor(profile.projects ?? []);
 }
 
 function emptyContact(): ContactDetails {
@@ -680,6 +827,7 @@ function buildProfileFromForm(): CandidateProfile {
     professionalSkills: parseLines(profileSkillsInput.value),
     projectAndAcademicSkills: parseLines(profileProjectSkillsInput.value),
     experience: readExperienceEditor(),
+    projects: readProjectEditor(),
     education: parseLines(profileEducationInput.value),
     languages: parseLanguages(profileLanguagesInput.value),
     workAuthorization: profileWorkAuthInput.value.trim(),
@@ -806,7 +954,7 @@ downloadCvButton.addEventListener("click", async () => {
   if (!selectedJobId) return;
   downloadCvButton.disabled = true;
   try {
-    const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(selectedJobId)}/cv`);
+    const response = await apiFetch(`/api/jobs/${encodeURIComponent(selectedJobId)}/cv`);
     if (!response.ok) {
       const problem = (await response.json().catch(() => null)) as ApiProblem | null;
       throw new Error(problem?.detail || problem?.title || `CV download failed with HTTP ${response.status}.`);
@@ -841,11 +989,12 @@ deleteCvButton.addEventListener("click", async () => {
   }
 });
 
-downloadGeneratedCvButton.addEventListener("click", async () => {
+async function downloadGeneratedCv(button: HTMLButtonElement): Promise<void> {
   if (!selectedJobId) return;
-  downloadGeneratedCvButton.disabled = true;
+  const format = button.dataset.format === "docx" ? "docx" : "pdf";
+  button.disabled = true;
   try {
-    const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(selectedJobId)}/generated-cv/docx`);
+    const response = await apiFetch(`/api/jobs/${encodeURIComponent(selectedJobId)}/generated-cv/${format}`);
     if (!response.ok) {
       const problem = (await response.json().catch(() => null)) as ApiProblem | null;
       throw new Error(problem?.detail || problem?.title || `CV download failed with HTTP ${response.status}.`);
@@ -853,7 +1002,7 @@ downloadGeneratedCvButton.addEventListener("click", async () => {
     const disposition = response.headers.get("Content-Disposition") || "";
     const fileName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
       ?? /filename="?([^";]+)"?/i.exec(disposition)?.[1]
-      ?? "CV.docx";
+      ?? `CV.${format}`;
     const objectUrl = URL.createObjectURL(await response.blob());
     const link = document.createElement("a");
     link.href = objectUrl;
@@ -865,9 +1014,12 @@ downloadGeneratedCvButton.addEventListener("click", async () => {
   } catch (error) {
     setMessage(generatedCvMessage, error instanceof Error ? error.message : "The CV could not be downloaded.", "error");
   } finally {
-    downloadGeneratedCvButton.disabled = false;
+    button.disabled = false;
   }
-});
+}
+
+downloadGeneratedCvButton.addEventListener("click", () => void downloadGeneratedCv(downloadGeneratedCvButton));
+downloadGeneratedDocxButton.addEventListener("click", () => void downloadGeneratedCv(downloadGeneratedDocxButton));
 
 deleteGeneratedCvButton.addEventListener("click", async () => {
   if (!selectedJobId || !window.confirm("Delete the CV DBot generated for this job? The job status is not changed.")) return;
@@ -907,6 +1059,23 @@ experienceEditor.addEventListener("click", event => {
   if (!Number.isInteger(index) || index < 0 || index >= entries.length) return;
   entries.splice(index, 1);
   renderExperienceEditor(entries);
+});
+
+element<HTMLButtonElement>("#add-project-button").addEventListener("click", () => {
+  const projects = readProjectEditor();
+  projects.push({ name: "", context: "", url: "", description: "", highlights: [], technologies: [] });
+  renderProjectEditor(projects);
+  projectEditor.lastElementChild?.querySelector<HTMLInputElement>('[data-project-field="name"]')?.focus();
+});
+
+projectEditor.addEventListener("click", event => {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement) || target.dataset.removeProject === undefined) return;
+  const index = Number(target.dataset.removeProject);
+  const projects = readProjectEditor();
+  if (!Number.isInteger(index) || index < 0 || index >= projects.length) return;
+  projects.splice(index, 1);
+  renderProjectEditor(projects);
 });
 
 profileEditForm.addEventListener("submit", async (event: SubmitEvent) => {
@@ -954,4 +1123,4 @@ jobSearch.addEventListener("input", renderJobs);
 statusFilter.addEventListener("change", renderJobs);
 refreshButton.addEventListener("click", () => void loadJobs());
 
-void loadJobs();
+void initAuth(API_BASE_URL, () => void loadJobs());

@@ -17,10 +17,27 @@
         </div>
         <div class="header-actions">
           <button id="toggle-page-tools-button" class="header-toggle-button" type="button" aria-controls="page-tools-content" aria-expanded="false" aria-label="Show page detection settings" title="Show or hide page detection settings">Tools</button>
-          <span class="version-tag">0.4.0</span>
+          <span class="version-tag">0.5.0</span>
         </div>
       </header>
 
+      <section id="signin-panel" class="tool-card signin-panel" aria-labelledby="signin-title" hidden>
+        <p class="eyebrow">PRIVATE WORKSPACE</p>
+        <h2 id="signin-title">Sign in to DBot</h2>
+        <p class="tool-card-copy">Your profile, job history and CVs are private. Sign in with the Google account allowed on your JobPilot API.</p>
+        <button id="google-signin-button" class="primary-button" type="button">
+          <span aria-hidden="true">G</span>
+          <span>Sign in with Google</span>
+        </button>
+        <p id="signin-status" class="page-fetch-status" role="status"></p>
+        <details class="prompt-layer">
+          <summary>Setting up Google sign-in?</summary>
+          <p class="field-hint">Add this exact address under <strong>Authorized redirect URIs</strong> of your Google OAuth client:</p>
+          <code id="signin-redirect-uri" class="redirect-uri"></code>
+        </details>
+      </section>
+
+      <div id="app-content">
       <nav class="tab-bar" role="tablist" aria-label="DBot sections">
         <button id="tab-job" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="panel-job" data-tab="job">Job</button>
         <button id="tab-profile" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-profile" data-tab="profile">My profile</button>
@@ -149,6 +166,8 @@
           <textarea id="cv-skills" rows="4"></textarea>
           <p class="cv-editor-section-title">Experience</p>
           <div id="cv-experience-editor" class="cv-experience-editor"></div>
+          <p id="cv-projects-title" class="cv-editor-section-title">Selected projects</p>
+          <div id="cv-project-editor" class="cv-experience-editor"></div>
           <label for="cv-education">Education <span class="optional">(one per line)</span></label>
           <textarea id="cv-education" rows="2"></textarea>
           <label for="cv-certifications">Certifications <span class="optional">(one per line)</span></label>
@@ -157,7 +176,10 @@
           <textarea id="cv-languages" rows="2"></textarea>
           <div class="button-row">
             <button id="save-cv-button" class="secondary-button" type="button">Save edits</button>
-            <button id="download-cv-button" class="secondary-button" type="button">⇩ Download DOCX</button>
+            <button id="download-cv-button" class="secondary-button download-pdf-button" type="button">⇩ Download PDF</button>
+          </div>
+          <div class="inline-actions">
+            <button id="download-docx-button" class="link-button" type="button">Or download an editable Word file (.docx)</button>
           </div>
           <p class="field-hint">Check every line before you send it. Your contact details are added from your profile and are never sent to the AI provider.</p>
         </div>
@@ -217,6 +239,12 @@
             <p class="field-hint">Fill in anything shown in [square brackets] before you paste it. Answers never include facts that are not in your profile.</p>
           </div>
         </section>
+      </div>
+
+      <p id="account-row" class="account-row" hidden>
+        Signed in as <strong id="account-email"></strong> ·
+        <button id="sign-out-button" class="link-button" type="button">Sign out</button>
+      </p>
       </div>
 
       <footer>

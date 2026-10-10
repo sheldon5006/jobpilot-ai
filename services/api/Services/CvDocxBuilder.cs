@@ -86,6 +86,30 @@ public static class CvDocxBuilder
             }
         }
 
+        if (cv.Projects.Count > 0)
+        {
+            body.Append(Heading("Selected projects"));
+            foreach (var project in cv.Projects)
+            {
+                var context = string.IsNullOrWhiteSpace(project.Context) ? string.Empty : Run($"  ·  {project.Context}", color: "555555");
+                body.Append(Paragraph(Run(project.Name, bold: true) + context, spacingAfter: 20, keepNext: true));
+                if (!string.IsNullOrWhiteSpace(project.Url))
+                {
+                    body.Append(Paragraph(Run(project.Url, sizeHalfPoints: 18, color: AccentColor), spacingAfter: 40, keepNext: true));
+                }
+
+                foreach (var bullet in project.Bullets)
+                {
+                    body.Append(Bullet(bullet));
+                }
+
+                if (project.Technologies.Count > 0)
+                {
+                    body.Append(Paragraph(Run(string.Join(", ", project.Technologies), sizeHalfPoints: 18, color: "555555"), spacingAfter: 100));
+                }
+            }
+        }
+
         AppendList(body, "Education", cv.Education);
         AppendList(body, "Certifications", cv.Certifications);
         AppendList(body, "Languages", cv.Languages);

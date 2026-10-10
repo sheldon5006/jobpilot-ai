@@ -1,7 +1,8 @@
 import { initAskTab, refreshAskJobContext } from "./ask-tab";
 import { initCvBuilder, resetCvBuilder } from "./cv-builder";
 import { loadProfileTab } from "./profile-tab";
-import { API_BASE_URL, element } from "./shared";
+import { initAuth } from "./auth";
+import { apiRequest, element } from "./shared";
 
 interface JobAnalysisResult {
   jobId?: string | null;
@@ -12,11 +13,6 @@ interface JobAnalysisResult {
   candidateExpectations?: string[];
   matchedRequirements?: Array<{ requirement?: string }>;
   gaps?: Array<{ requirement?: string; severity?: string; status?: string }>;
-}
-
-interface ApiProblem {
-  title?: string;
-  detail?: string;
 }
 
 interface ExtractedJobDetails {
@@ -324,21 +320,14 @@ async function analyzeCurrentJob(): Promise<string | null> {
   const signature = currentJobSignature();
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/jobs/analyze`, {
+    const result = await apiRequest<JobAnalysisResult>("/api/jobs/analyze", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jobTitle: jobTitleInput.value.trim(),
         company: companyInput.value.trim(),
         jobDescription: description
       })
     });
-    const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      const problem = (payload ?? {}) as ApiProblem;
-      throw new Error(problem.detail || problem.title || `Local API returned HTTP ${response.status}.`);
-    }
-    const result = payload as JobAnalysisResult;
     renderAnalysis(result);
     setPageStatus("Analysis complete. Review the recommendation and evidence below.", "success");
     if (result.jobId && result.jobId !== savedJobId) resetCvBuilder();
@@ -346,12 +335,7 @@ async function analyzeCurrentJob(): Promise<string | null> {
     savedJobSignature = signature;
     return savedJobId;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "An unexpected error occurred.";
-    if (message.toLowerCase().includes("failed to fetch")) {
-      renderError("Cannot reach the local API. Start the ASP.NET Core API at http://127.0.0.1:5080, then try again.");
-    } else {
-      renderError(message);
-    }
+    renderError(error instanceof Error ? error.message : "An unexpected error occurred.");
     return null;
   } finally {
     analyzeButton.disabled = false;
@@ -628,4 +612,5 @@ for (const button of tabButtons) {
 initCvBuilder({ ensureSavedJob });
 initAskTab(currentAskContext);
 
+void initAuth();
 void requestSettings();

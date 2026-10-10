@@ -7,6 +7,9 @@ public sealed class CandidateProfile
     public List<string> ProfessionalSkills { get; init; } = [];
     public List<string> ProjectAndAcademicSkills { get; init; } = [];
     public List<ExperienceEntry> Experience { get; init; } = [];
+
+    // Personal, academic or employer-context projects. Never counted as professional experience.
+    public List<ProjectEntry> Projects { get; init; } = [];
     public List<string> Education { get; init; } = [];
     public List<LanguageEntry> Languages { get; init; } = [];
     public string WorkAuthorization { get; init; } = string.Empty;
@@ -24,6 +27,7 @@ public sealed class CandidateProfile
         ProfessionalSkills = ProfessionalSkills,
         ProjectAndAcademicSkills = ProjectAndAcademicSkills,
         Experience = Experience,
+        Projects = Projects,
         Education = Education,
         Languages = Languages,
         WorkAuthorization = WorkAuthorization,
@@ -48,6 +52,18 @@ public sealed class ExperienceEntry
     public string Role { get; init; } = string.Empty;
     public string Period { get; init; } = string.Empty;
     public List<string> Evidence { get; init; } = [];
+}
+
+public sealed class ProjectEntry
+{
+    public string Name { get; init; } = string.Empty;
+
+    // e.g. "Personal project · in progress" or "Global ESoftSys".
+    public string Context { get; init; } = string.Empty;
+    public string Url { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public List<string> Highlights { get; init; } = [];
+    public List<string> Technologies { get; init; } = [];
 }
 
 public sealed class LanguageEntry

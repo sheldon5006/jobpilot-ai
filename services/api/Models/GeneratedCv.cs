@@ -20,6 +20,7 @@ public sealed class CvDocument
     public string Summary { get; set; } = string.Empty;
     public List<CvSkillGroup> SkillGroups { get; set; } = [];
     public List<CvExperience> Experience { get; set; } = [];
+    public List<CvProject> Projects { get; set; } = [];
     public List<string> Education { get; set; } = [];
     public List<string> Languages { get; set; } = [];
     public List<string> Certifications { get; set; } = [];
@@ -38,6 +39,17 @@ public sealed class CvExperience
     public string Role { get; set; } = string.Empty;
     public string Period { get; set; } = string.Empty;
     public List<string> Bullets { get; set; } = [];
+}
+
+public sealed class CvProject
+{
+    // Index into CandidateProfile.Projects; name, context, URL and technologies are copied from the profile.
+    public int SourceIndex { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Context { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public List<string> Bullets { get; set; } = [];
+    public List<string> Technologies { get; set; } = [];
 }
 
 public sealed class GenerateCvRequest
