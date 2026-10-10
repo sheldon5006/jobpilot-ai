@@ -1,0 +1,901 @@
+param(
+    [switch]$SkipScoreStability,
+    [ValidateRange(0, 100)]
+    [int]$ScoreTolerance = 10,
+    [ValidateRange(0, 3)]
+    [int]$TransientRetries = 2
+)
+
+$ErrorActionPreference = "Stop"
+$apiUrl = "http://127.0.0.1:5080/api/jobs/analyze"
+$profilePath = Join-Path $PSScriptRoot "..\candidate-profile.json"
+
+if (-not (Test-Path $profilePath)) {
+    throw "Candidate profile not found at '$profilePath'. Configure services/api/candidate-profile.json first."
+}
+
+try {
+    $profile = Get-Content -Raw -Path $profilePath | ConvertFrom-Json
+} catch {
+    throw "Could not read candidate-profile.json as JSON: $($_.Exception.Message)"
+}
+
+$profileAnchors = @()
+$profileAnchors += @($profile.professionalSkills)
+$profileAnchors += @($profile.projectAndAcademicSkills)
+$profileAnchors += @($profile.professionalSummary)
+$profileAnchors += @($profile.education)
+$profileAnchors += @($profile.certifications)
+$profileAnchors += @($profile.workAuthorization)
+foreach ($language in @($profile.languages)) {
+    $profileAnchors += @("$($language.language) $($language.proficiency)")
+}
+foreach ($experience in @($profile.experience)) {
+    $profileAnchors += @($experience.evidence)
+}
+$profileAnchors = @(
+    $profileAnchors |
+        Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+        Sort-Object -Unique
+)
+
+$ignoredTokens = @(
+    "a", "an", "the", "and", "or", "of", "to", "for", "with", "as",
+    "is", "are", "be", "been", "being", "must", "have", "has", "had",
+    "that", "this", "these", "those", "in", "on", "by", "from", "their",
+    "candidate", "profile", "evidence", "explicitly", "supported"
+)
+
+function Get-NormalizedTokens {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return @()
+    }
+
+    $tokens = [regex]::Matches($Text.ToLowerInvariant(), '[a-z0-9+#.]+')
+    $normalized = foreach ($item in $tokens) {
+        $token = $item.Value.Trim('.')
+
+        if ($token -in @("development", "developing", "developed", "develops", "build", "building", "built", "builds")) {
+            $token = "develop"
+        } elseif ($token -eq "proficiency" -or $token -eq "proficient") {
+            $token = "language"
+        } elseif ($token -eq "skills") {
+            $token = "skill"
+        } elseif ($token -eq "apis") {
+            $token = "api"
+        } elseif ($token -match 'ies$' -and $token.Length -gt 4) {
+            $token = $token.Substring(0, $token.Length - 3) + "y"
+        } elseif ($token -match 's$' -and $token.Length -gt 4 -and
+                  $token -notmatch '(ss|us|is)$') {
+            $token = $token.Substring(0, $token.Length - 1)
+        }
+
+        if ($token.Length -gt 0 -and $ignoredTokens -notcontains $token) {
+            $token
+        }
+    }
+
+    return @($normalized | Sort-Object -Unique)
+}
+
+function Test-RequirementGroundedInVacancy {
+    param(
+        [Parameter(Mandatory)][string]$Requirement,
+        [Parameter(Mandatory)][string]$Vacancy
+    )
+
+    # Requirement labels may add generic descriptors not written verbatim in the job ad.
+    # Ignore only those descriptors; keep concrete skills, qualifications, levels, and quantities strict.
+    $genericRequirementWords = @(
+        "professional", "practical", "relevant", "commercial", "work", "working",
+        "experience", "experienced", "using", "knowledge", "demonstrated", "hands",
+        "language", "proficiency"
+    )
+    $requirementTokens = @(
+        Get-NormalizedTokens $Requirement |
+            Where-Object { $genericRequirementWords -notcontains $_ }
+    )
+    $vacancyTokens = @(Get-NormalizedTokens $Vacancy)
+
+    if ($requirementTokens.Count -eq 0) {
+        return $false
+    }
+
+    $missingTokens = @(
+        $requirementTokens | Where-Object { $vacancyTokens -notcontains $_ }
+    )
+
+    return ($missingTokens.Count -eq 0)
+}
+
+function Test-ProfilePlaceholder {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $true }
+    return $Text.Trim() -match '(?i)^(?:replace\b|placeholder\b|unknown\b|not\s+specified\b|not\s+provided\b|add\b|enter\b|update\b|fill\s+in\b|tbd\b|n\s*/\s*a\b)'
+}
+
+function Get-CleanProfileFactText {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return "" }
+    $retained = @(
+        $Text -split ';' |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { -not (Test-ProfilePlaceholder $_) }
+    )
+    return ($retained -join "; ")
+}
+
+function Add-ProfileFactToCatalog {
+    param(
+        [Parameter(Mandatory)][hashtable]$Catalog,
+        [Parameter(Mandatory)][hashtable]$Counters,
+        [Parameter(Mandatory)][string]$Prefix,
+        [Parameter(Mandatory)][string]$Category,
+        [AllowNull()][string]$Text
+    )
+
+    $value = Get-CleanProfileFactText -Text $Text
+    if ([string]::IsNullOrWhiteSpace($value)) { return }
+
+    if (-not $Counters.ContainsKey($Prefix)) { $Counters[$Prefix] = 0 }
+    $Counters[$Prefix] = [int]$Counters[$Prefix] + 1
+    $id = "{0}-{1:D3}" -f $Prefix, [int]$Counters[$Prefix]
+    $Catalog[$id] = [pscustomobject]@{ Category = $Category; Text = $value }
+}
+
+function New-ProfileFactCatalog {
+    param([Parameter(Mandatory)]$Profile)
+
+    $catalog = @{}
+    $counters = @{}
+
+    Add-ProfileFactToCatalog $catalog $counters "SUM" "professional_summary" ([string]$Profile.professionalSummary)
+    foreach ($skill in @($Profile.professionalSkills)) {
+        Add-ProfileFactToCatalog $catalog $counters "SKL" "professional_skill" ([string]$skill)
+    }
+    foreach ($skill in @($Profile.projectAndAcademicSkills)) {
+        Add-ProfileFactToCatalog $catalog $counters "PRJ" "project_academic_skill" ([string]$skill)
+    }
+    foreach ($experience in @($Profile.experience)) {
+        $isInternship = [string]$experience.role -match '(?i)intern'
+        $prefix = if ($isInternship) { "INT" } else { "EXP" }
+        $category = if ($isInternship) { "internship_experience" } else { "professional_experience" }
+        $cleanPeriod = Get-CleanProfileFactText -Text ([string]$experience.period)
+        if (-not [string]::IsNullOrWhiteSpace($cleanPeriod)) {
+            $roleLabel = if ([string]::IsNullOrWhiteSpace([string]$experience.role)) { "Experience" } else { ([string]$experience.role).Trim() }
+            Add-ProfileFactToCatalog $catalog $counters "DATE" $category ("{0}: {1}" -f $roleLabel, $cleanPeriod)
+        }
+        foreach ($item in @($experience.evidence)) {
+            Add-ProfileFactToCatalog $catalog $counters $prefix $category ([string]$item)
+        }
+    }
+    foreach ($education in @($Profile.education)) {
+        Add-ProfileFactToCatalog $catalog $counters "EDU" "education" ([string]$education)
+    }
+    foreach ($certification in @($Profile.certifications)) {
+        Add-ProfileFactToCatalog $catalog $counters "CER" "certification" ([string]$certification)
+    }
+    foreach ($language in @($Profile.languages)) {
+        $cleanProficiency = Get-CleanProfileFactText -Text ([string]$language.proficiency)
+        if (-not [string]::IsNullOrWhiteSpace([string]$language.language) -and
+            -not [string]::IsNullOrWhiteSpace($cleanProficiency)) {
+            Add-ProfileFactToCatalog $catalog $counters "LAN" "language" ("{0}: {1}" -f ([string]$language.language).Trim(), $cleanProficiency)
+        }
+    }
+    Add-ProfileFactToCatalog $catalog $counters "AUTH" "work_authorization" ([string]$Profile.workAuthorization)
+
+    return $catalog
+}
+
+function Get-AllowedEvidenceCategories {
+    param([Parameter(Mandatory)][string]$Requirement)
+
+    if ($Requirement -match '(?i)\b(?:work[\s-]+authori[sz]ation|authori[sz]ation[\s-]+to[\s-]+work|right[\s-]+to[\s-]+work|work[\s-]+permit|visa|sponsorship|residence[\s-]+permit|work[\s-]+eligibility)\b') {
+        return @("work_authorization")
+    }
+    if ($Requirement -match '(?i)\b(?:werkstudent|working[\s-]+student|student[\s-]+status|enrol(?:l)?ment|enrolled|university[\s-]+student)\b') {
+        return @("education")
+    }
+    if ($Requirement -match '(?i)\b(?:certification|certificate|credential|licen[cs]e|security[\s-]+clearance)\b') {
+        return @("certification")
+    }
+    if ($Requirement -match '(?i)\b(?:language|German|Deutsch|English|Englisch|CEFR|proficiency|C2|C1|B2|B1|A2|A1)\b') {
+        return @("language")
+    }
+    if ($Requirement -match '(?i)\b(?:degree|qualification|graduate|graduation|university|education|academic|study|bachelor|master|MSc|BSc|PhD|diploma)\b') {
+        return @("education")
+    }
+    if ($Requirement -match '(?i)\b(?:professional|commercial|work)\s+experience\b|\b(?:minimum|at\s+least)\s+\d+\s+(?:years?|months?)\b') {
+        return @("professional_summary", "professional_experience")
+    }
+    if ($Requirement -match '(?i)\b(?:experience|experienced|practical|professional|commercial|hands[\s-]+on|worked\s+on)\b') {
+        return @("professional_summary", "professional_experience", "internship_experience")
+    }
+    return @("professional_summary", "professional_skill", "professional_experience", "internship_experience", "project_academic_skill")
+}
+
+function Test-EvidenceGroundedInProfile {
+    param(
+        [Parameter(Mandatory)][string]$Requirement,
+        [Parameter(Mandatory)][string]$EvidenceText,
+        [Parameter(Mandatory)][string[]]$EvidenceIds
+    )
+
+    $ids = @($EvidenceIds | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($ids.Count -eq 0) { return $false }
+
+    $facts = @()
+    foreach ($id in $ids) {
+        if (-not $profileFactCatalog.ContainsKey([string]$id)) { return $false }
+        $facts += $profileFactCatalog[[string]$id]
+    }
+
+    $allowed = @(Get-AllowedEvidenceCategories -Requirement $Requirement)
+    $relevantFacts = @($facts | Where-Object { $allowed -contains $_.Category })
+    if ($relevantFacts.Count -eq 0 -or $relevantFacts.Count -ne $facts.Count) { return $false }
+
+    $expectedEvidence = (@($relevantFacts | ForEach-Object { $_.Text }) -join " ").Trim()
+    return ($EvidenceText.Trim() -ceq $expectedEvidence)
+}
+
+$profileFactCatalog = New-ProfileFactCatalog -Profile $profile
+
+$cases = @(
+    [pscustomobject]@{
+        Name = "1 - Strong technical match"
+        JobTitle = ".NET Software Developer"
+        JobDescription = "We need a Software Developer to build web applications using C#, ASP.NET Core, REST APIs, SQL Server, and Angular. Requirements are practical experience developing enterprise web applications, working with APIs, and using relational databases. No language proficiency, degree, or specific employment-duration requirement is specified."
+    },
+    [pscustomobject]@{
+        Name = "2 - German preferred"
+        JobTitle = "Full-Stack Developer (.NET/Angular)"
+        JobDescription = "Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. German language skills are preferred but not mandatory. No specific German certificate is required."
+    },
+    [pscustomobject]@{
+        Name = "3 - German C2 mandatory"
+        JobTitle = ".NET Developer - German C2 Required"
+        JobDescription = "Required: development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. Applicants must already demonstrate German proficiency at CEFR C2 before starting. This is a strict mandatory requirement, not a preference. Candidates who are still learning German do not meet this requirement."
+    },
+    [pscustomobject]@{
+        Name = "4 - Work authorization gate"
+        JobTitle = ".NET Software Developer - Right to Work Required"
+        JobDescription = "Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. Applicants must already have the legal right to work in Germany. The employer cannot provide visa sponsorship. No degree or language requirement is specified."
+        ExpectedQuestionPattern = "authori[sz]ed|right to work|sponsorship|work eligibility"
+    },
+    [pscustomobject]@{
+        Name = "5 - Mandatory certification"
+        JobTitle = ".NET Software Developer - AWS Certification Required"
+        JobDescription = "Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. An AWS Certified Developer - Associate certification is mandatory before starting; the candidate must currently hold this credential, not merely be preparing for it. No language requirement is specified."
+        ExpectedQuestionPattern = "AWS|certification|credential|certificate"
+    },
+    [pscustomobject]@{
+        Name = "6 - Werkstudent enrolment"
+        JobTitle = "Werkstudent Software Developer (.NET)"
+        JobDescription = "Applicants must be currently enrolled at a university throughout employment. Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. No additional degree, language, or employment-duration requirement is specified."
+        ExpectedQuestionPattern = "enrolled|student status|university|education"
+    },
+    [pscustomobject]@{
+        Name = "7 - Minimum experience threshold"
+        JobTitle = "Senior .NET Software Developer"
+        JobDescription = "Required: practical development experience with C#, ASP.NET Core, REST APIs, SQL Server, and Angular. A minimum of 10 years of relevant professional experience is mandatory. No language, degree, or certification requirement is specified."
+        ExpectedQuestionPattern = "experience|years|dates"
+    }
+)
+
+function Get-ApiErrorDetail {
+    param([Parameter(Mandatory)]$ErrorRecord)
+
+    # Cache the first read: the response stream can be consumed only once.
+    try {
+        $cached = [string]$ErrorRecord.Exception.Data["JobPilotApiErrorDetail"]
+        if (-not [string]::IsNullOrWhiteSpace($cached)) {
+            return $cached
+        }
+    } catch {
+        # Exception.Data may be unavailable for some error types.
+    }
+
+    $body = [string]$ErrorRecord.ErrorDetails.Message
+
+    # Windows PowerShell 5.1 may leave ErrorDetails.Message empty for HTTP errors.
+    # Read the actual response body so ASP.NET Problem Details can expose the Gemini/Ollama cause.
+    if ([string]::IsNullOrWhiteSpace($body)) {
+        try {
+            $response = $ErrorRecord.Exception.Response
+            if ($null -ne $response) {
+                if ($response -is [System.Net.HttpWebResponse]) {
+                    $stream = $response.GetResponseStream()
+                    if ($null -ne $stream) {
+                        $reader = [System.IO.StreamReader]::new($stream)
+                        try {
+                            $body = $reader.ReadToEnd()
+                        } finally {
+                            $reader.Dispose()
+                        }
+                    }
+                } elseif ($null -ne $response.Content) {
+                    $body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                }
+            }
+        } catch {
+            # Keep the original error below if the response body cannot be read.
+        }
+    }
+
+    $detail = ""
+    if (-not [string]::IsNullOrWhiteSpace($body)) {
+        try {
+            $problem = $body | ConvertFrom-Json -ErrorAction Stop
+            if (-not [string]::IsNullOrWhiteSpace([string]$problem.detail)) {
+                $detail = ([string]$problem.detail).Trim()
+            } elseif (-not [string]::IsNullOrWhiteSpace([string]$problem.title)) {
+                $detail = ([string]$problem.title).Trim()
+            } else {
+                $detail = $body.Trim()
+            }
+        } catch {
+            # Some reverse proxies return plain text instead of Problem Details JSON.
+            $detail = $body.Trim()
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($detail)) {
+        $detail = [string]$ErrorRecord.Exception.Message
+    }
+
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($detail)) {
+            $ErrorRecord.Exception.Data["JobPilotApiErrorDetail"] = $detail
+        }
+    } catch {
+        # Caching is best-effort; the parsed result is still returned.
+    }
+
+    return $detail
+}
+
+function Get-ApiHttpStatusCode {
+    param([Parameter(Mandatory)]$ErrorRecord)
+
+    # Our API maps most upstream Gemini errors to its own HTTP 502. Prefer the
+    # provider status embedded in Problem Details so only genuine transient failures retry.
+    $detail = Get-ApiErrorDetail -ErrorRecord $ErrorRecord
+    if ($detail -match '(?i)\b(?:Gemini|Ollama) returned HTTP\s+(\d{3})\b') {
+        return [int]$Matches[1]
+    }
+
+    try {
+        $response = $ErrorRecord.Exception.Response
+        if ($null -ne $response -and $null -ne $response.StatusCode) {
+            $statusCode = [int]$response.StatusCode
+            if ($statusCode -in @(429, 502, 503, 504)) {
+                return $statusCode
+            }
+        }
+    } catch {
+        # Fall through to the platform error message below.
+    }
+
+    if ($ErrorRecord.Exception.Message -match '\((429|502|503|504)\)\s*(?:Too Many Requests|Bad Gateway|Service Unavailable|Gateway Timeout)') {
+        return [int]$Matches[1]
+    }
+
+    return 0
+}
+
+function Invoke-JobAnalysis {
+    param([Parameter(Mandatory)]$Case)
+
+    $body = @{
+        jobTitle = $Case.JobTitle
+        company = "DBot Automated Regression Test"
+        jobDescription = $Case.JobDescription
+        saveToHistory = $false
+    } | ConvertTo-Json -Depth 8
+
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $maxAttempts = $TransientRetries + 1
+    $lastError = ""
+    $lastStatusCode = 0
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+            $result = Invoke-RestMethod -Uri $apiUrl -Method Post -ContentType "application/json" -Body $body -TimeoutSec 180
+            $timer.Stop()
+
+            return [pscustomobject]@{
+                Success = $true
+                Result = $result
+                Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 2)
+                Error = ""
+                StatusCode = 0
+            }
+        } catch {
+            $lastError = Get-ApiErrorDetail -ErrorRecord $_
+            $statusCode = Get-ApiHttpStatusCode -ErrorRecord $_
+            $lastStatusCode = $statusCode
+
+            $providerAlreadyRetried = $lastError -match '(?i)\b(?:Gemini|Ollama) returned HTTP\s+\d{3}\b'
+            if ($statusCode -ge 500 -and $statusCode -lt 600 -and
+                -not $providerAlreadyRetried -and $attempt -lt $maxAttempts) {
+                $delaySeconds = [math]::Pow(2, $attempt - 1)
+                Write-Host "Transient HTTP $statusCode for '$($Case.Name)'. Retrying in $delaySeconds second(s) ($attempt/$($maxAttempts - 1))..." -ForegroundColor DarkYellow
+                Start-Sleep -Seconds $delaySeconds
+                continue
+            }
+
+            $timer.Stop()
+            return [pscustomobject]@{
+                Success = $false
+                Result = $null
+                Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 2)
+                Error = $lastError
+                StatusCode = $statusCode
+            }
+        }
+    }
+
+    $timer.Stop()
+    return [pscustomobject]@{
+        Success = $false
+        Result = $null
+        Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 2)
+        Error = $lastError
+        StatusCode = $lastStatusCode
+    }
+}
+function Get-QualityIssues {
+    param(
+        [Parameter(Mandatory)]$Case,
+        [Parameter(Mandatory)]$Result
+    )
+
+    $issues = [System.Collections.Generic.List[string]]::new()
+    $vacancy = [string]$Case.JobTitle + [Environment]::NewLine + [string]$Case.JobDescription
+
+    if ([string]$Result.mandatoryRequirementsStatus -notin @("Not met", "Needs verification", "No unresolved mandatory gaps")) {
+        $issues.Add("MISSING_MANDATORY_STATUS: API did not return a recognised mandatory-requirements status.")
+    }
+
+    # Controlled scenarios permit only a narrowly-scoped question when a mandatory
+    # eligibility fact is intentionally absent from the profile.
+    foreach ($question in @($Result.questionsToVerify)) {
+        if ([string]::IsNullOrWhiteSpace([string]$question)) {
+            continue
+        }
+
+        $expectedQuestionPattern = [string]$Case.ExpectedQuestionPattern
+        if (-not [string]::IsNullOrWhiteSpace($expectedQuestionPattern) -and
+            [regex]::IsMatch([string]$question, $expectedQuestionPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+            continue
+        }
+
+        $issues.Add("UNSUPPORTED_QUESTION: '$question'")
+    }
+
+    # A match must correspond to vacancy text, and its evidence must cite the local profile.
+    foreach ($match in @($Result.matchedRequirements)) {
+        $requirement = ([string]$match.requirement -replace '\s*\(preferred\)\s*$', '').Trim()
+        $evidence = ([string]$match.evidence).Trim()
+
+        if ([string]::IsNullOrWhiteSpace($requirement) -or
+            -not (Test-RequirementGroundedInVacancy -Requirement $requirement -Vacancy $vacancy)) {
+            $issues.Add("UNSUPPORTED_MATCH: '$requirement' contains terms not grounded in the vacancy text.")
+        }
+
+        $evidenceIds = @($match.evidenceIds)
+        if (-not (Test-EvidenceGroundedInProfile -Requirement $requirement -EvidenceText $evidence -EvidenceIds $evidenceIds)) {
+            $issues.Add("UNSUPPORTED_EVIDENCE: '$requirement' did not cite valid profile facts of an allowed category, or rendered evidence did not match those facts.")
+        }
+    }
+
+    foreach ($warning in @($Result.evidenceValidationWarnings)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$warning)) {
+            $issues.Add("EVIDENCE_VALIDATION_WARNING: '$warning'")
+        }
+    }
+
+    foreach ($warning in @($Result.requirementValidationWarnings)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$warning)) {
+            $issues.Add("VACANCY_REQUIREMENT_VALIDATION_WARNING: '$warning'")
+        }
+    }
+
+    # The score exposed by the API must agree with its calibration breakdown.
+    $rationale = [string]$Result.rationale
+    $calibrationMatch = [regex]::Match(
+        $rationale,
+        'Score calibration:\s*model estimate\s*(\d+)/100;.*?calibrated score\s*(\d+)/100',
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+
+    if (-not $calibrationMatch.Success) {
+        $issues.Add("MISSING_SCORE_BREAKDOWN: rationale did not contain a parseable calibration breakdown.")
+    } elseif ([int]$calibrationMatch.Groups[2].Value -ne [int]$Result.matchScore) {
+        $issues.Add("SCORE_BREAKDOWN_MISMATCH: API score $($Result.matchScore) differs from the rationale's calibrated score $($calibrationMatch.Groups[2].Value).")
+    }
+
+    if ([int]$Result.matchScore -lt 0 -or [int]$Result.matchScore -gt 100) {
+        $issues.Add("SCORE_OUT_OF_RANGE: $($Result.matchScore)")
+    }
+
+    return @($issues.ToArray())
+}
+
+function Test-ExpectedScenario {
+    param(
+        [Parameter(Mandatory)]$Case,
+        [Parameter(Mandatory)]$Result
+    )
+
+    $gaps = @($Result.gaps)
+    $questions = @($Result.questionsToVerify)
+
+    switch ($Case.Name) {
+        "1 - Strong technical match" {
+            return (
+                $Result.recommendation -eq "Apply" -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
+                $gaps.Count -eq 0 -and
+                $questions.Count -eq 0
+            )
+        }
+        "2 - German preferred" {
+            $germanGaps = @($gaps | Where-Object { $_.requirement -match "German|Deutsch" })
+            $otherGaps = @($gaps | Where-Object { $_.requirement -notmatch "German|Deutsch" })
+            return (
+                $Result.recommendation -eq "Apply" -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
+                $germanGaps.Count -eq 1 -and
+                $germanGaps[0].severity -eq "Preferred" -and
+                $otherGaps.Count -eq 0 -and
+                $questions.Count -eq 0
+            )
+        }
+        "3 - German C2 mandatory" {
+            $germanGaps = @($gaps | Where-Object { $_.requirement -match "German|Deutsch" })
+            return (
+                $Result.recommendation -eq "Skip" -and
+                $germanGaps.Count -eq 1 -and
+                $germanGaps[0].severity -eq "Must-have" -and
+                $germanGaps[0].status -eq "Unmet" -and
+                $Result.mandatoryRequirementsStatus -eq "Not met" -and
+                $questions.Count -eq 0
+            )
+        }
+        "4 - Work authorization gate" {
+            $authStatus = [string]$profile.workAuthorization
+            $authUnknown = [string]::IsNullOrWhiteSpace($authStatus) -or
+                $authStatus -match "\b(replace|unknown|not specified|not provided|tbd|n/a)\b"
+            $authRequiresSponsorship = $authStatus -match "\b(?:require|requires|need|needs)\s+(?:(?:visa|employer|work)\s+)?sponsorship\b"
+            $authExplicitlyUnmet = $authStatus -match "\b(?:not\s+(?:currently\s+)?authori[sz]ed|not\s+eligible\s+to\s+work|no\s+legal\s+right\s+to\s+work|does\s+not\s+have\s+(?:the\s+)?right\s+to\s+work)\b"
+            $authPositive = $authStatus -match "\b(?:authori[sz]ed|eligible|legal\s+right|right\s+to\s+work|valid\s+work\s+permit)\b" -and
+                -not $authExplicitlyUnmet -and
+                $authStatus -notmatch "\b(?:student\s+(?:visa|residence\s+permit)|limited\s+working\s+hours|work\s+limits?)\b"
+
+            $authGaps = @($gaps | Where-Object { $_.requirement -match "authori[sz]ation|right to work|sponsorship|work eligibility" })
+            if ($authUnknown -or (-not $authRequiresSponsorship -and -not $authExplicitlyUnmet -and -not $authPositive)) {
+                return (
+                    $Result.recommendation -eq "Review" -and
+                    $authGaps.Count -eq 1 -and
+                    $authGaps[0].severity -eq "Must-have" -and
+                    $authGaps[0].status -eq "Unverified" -and
+                    $Result.mandatoryRequirementsStatus -eq "Needs verification" -and
+                    $questions.Count -eq 1
+                )
+            }
+
+            if ($authRequiresSponsorship -or $authExplicitlyUnmet) {
+                return (
+                    $Result.recommendation -eq "Skip" -and
+                    $authGaps.Count -eq 1 -and
+                    $authGaps[0].severity -eq "Must-have" -and
+                    $authGaps[0].status -eq "Unmet" -and
+                    $Result.mandatoryRequirementsStatus -eq "Not met" -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            return (
+                $authPositive -and
+                $Result.recommendation -eq "Apply" -and
+                $authGaps.Count -eq 0 -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
+                $questions.Count -eq 0
+            )
+        }
+        "5 - Mandatory certification" {
+            $certs = @($profile.certifications)
+            $hasAwsCredential = @($certs | Where-Object { [string]$_ -match "AWS\s+Certified\s+Developer" }).Count -gt 0
+            $awsGaps = @($gaps | Where-Object { $_.requirement -match "AWS|certification|certificate" })
+            if ($hasAwsCredential) {
+                return (
+                    $Result.recommendation -eq "Apply" -and
+                    $awsGaps.Count -eq 0 -and
+                    $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            return (
+                $Result.recommendation -eq "Review" -and
+                $awsGaps.Count -eq 1 -and
+                $awsGaps[0].severity -eq "Must-have" -and
+                $awsGaps[0].status -eq "Unverified" -and
+                $Result.mandatoryRequirementsStatus -eq "Needs verification" -and
+                $questions.Count -eq 1
+            )
+        }
+        "6 - Werkstudent enrolment" {
+            $educationText = (@($profile.education) -join " ")
+            $constraintsText = (@($profile.constraints) -join " ")
+            $activeStudent = $educationText -match "\b(?:in\s+progress|ongoing|currently\s+studying|currently\s+enrolled|enrolled|expected\s+graduation|expected\s+completion)\b" -and
+                $educationText -notmatch "\b(?:replace|unknown|not\s+specified|not\s+provided|tbd|n/a)\b"
+            $notEnrolled = ($educationText + " " + $constraintsText) -match "\b(?:not\s+currently\s+enrolled|not\s+enrolled|not\s+currently\s+studying|no\s+longer\s+enrolled)\b"
+            $studentGaps = @($gaps | Where-Object { $_.requirement -match "Werkstudent|working student|enrolled|enrollment|enrolment|student status" })
+
+            if ($activeStudent -and -not $notEnrolled) {
+                return (
+                    $Result.recommendation -eq "Apply" -and
+                    $studentGaps.Count -eq 0 -and
+                    $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            if ($notEnrolled) {
+                return (
+                    $Result.recommendation -eq "Skip" -and
+                    $studentGaps.Count -eq 1 -and
+                    $studentGaps[0].severity -eq "Must-have" -and
+                    $studentGaps[0].status -eq "Unmet" -and
+                    $Result.mandatoryRequirementsStatus -eq "Not met" -and
+                    $questions.Count -eq 0
+                )
+            }
+
+            return (
+                $Result.recommendation -eq "Review" -and
+                $studentGaps.Count -eq 1 -and
+                $studentGaps[0].severity -eq "Must-have" -and
+                $studentGaps[0].status -eq "Unverified" -and
+                $Result.mandatoryRequirementsStatus -eq "Needs verification" -and
+                $questions.Count -eq 1
+            )
+        }
+        "7 - Minimum experience threshold" {
+            $experienceGaps = @($gaps | Where-Object {
+                $_.requirement -match "\b(?:years?|yrs?|months?)\b" -and
+                $_.requirement -match "\bexperience\b"
+            })
+            $experienceMatches = @($Result.matchedRequirements | Where-Object {
+                $_.requirement -match "\b(?:years?|yrs?|months?)\b" -and
+                $_.requirement -match "\bexperience\b"
+            })
+
+            if ($experienceGaps.Count -eq 1) {
+                if ($experienceGaps[0].severity -ne "Must-have") { return $false }
+                if ($experienceGaps[0].status -eq "Unmet") {
+                    return $Result.recommendation -eq "Skip" -and $Result.mandatoryRequirementsStatus -eq "Not met" -and $questions.Count -eq 0
+                }
+                if ($experienceGaps[0].status -eq "Unverified") {
+                    return $Result.recommendation -eq "Review" -and $Result.mandatoryRequirementsStatus -eq "Needs verification" -and $questions.Count -eq 1
+                }
+                return $false
+            }
+
+            return (
+                $experienceGaps.Count -eq 0 -and
+                $experienceMatches.Count -eq 1 -and
+                $Result.recommendation -eq "Apply" -and
+                $Result.mandatoryRequirementsStatus -eq "No unresolved mandatory gaps" -and
+                $questions.Count -eq 0
+            )
+        }
+    }
+
+    return $false
+}
+
+$summary = [System.Collections.Generic.List[object]]::new()
+$allIssues = [System.Collections.Generic.List[string]]::new()
+$inconclusiveIssues = [System.Collections.Generic.List[string]]::new()
+$haltAfterProviderFailure = $false
+$scoreSamples = @{}
+foreach ($case in $cases) {
+    $scoreSamples[$case.Name] = [System.Collections.Generic.List[int]]::new()
+}
+
+foreach ($case in $cases) {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor DarkGray
+    Write-Host $case.Name -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor DarkGray
+
+    $call = Invoke-JobAnalysis -Case $case
+    if (-not $call.Success) {
+        if ($call.StatusCode -eq 429 -or ($call.StatusCode -ge 500 -and $call.StatusCode -lt 600)) {
+            $providerStatus = if ($call.StatusCode -eq 429) { "rate limit (HTTP 429)" } else { "transient provider/connectivity failure (HTTP $($call.StatusCode))" }
+            $summary.Add([pscustomobject]@{
+                Test = $case.Name
+                Status = "INCONCLUSIVE"
+                Recommendation = ""
+                Score = $null
+                Gaps = $null
+                Seconds = $call.Seconds
+            })
+            $inconclusiveIssues.Add("$($case.Name): $providerStatus; scenario could not be evaluated. Detail: $($call.Error)")
+            Write-Host "$providerStatus; this scenario is inconclusive, not a rule failure. Detail: $($call.Error)" -ForegroundColor Yellow
+            $haltAfterProviderFailure = $true
+            break
+        } else {
+            $summary.Add([pscustomobject]@{
+                Test = $case.Name
+                Status = "REQUEST FAILED"
+                Recommendation = ""
+                Score = $null
+                Gaps = $null
+                Seconds = $call.Seconds
+            })
+            $allIssues.Add("$($case.Name): REQUEST FAILED after $($call.Seconds)s - $($call.Error)")
+            Write-Host $call.Error -ForegroundColor Red
+        }
+        continue
+    }
+
+    $result = $call.Result
+    $scenarioPassed = Test-ExpectedScenario -Case $case -Result $result
+    $issues = @(Get-QualityIssues -Case $case -Result $result)
+
+    if (-not $scenarioPassed) {
+        $issues += "SCENARIO_EXPECTATION_FAILED: recommendation/gaps/questions did not match expected behaviour."
+    }
+
+    $scoreSamples[$case.Name].Add([int]$result.matchScore)
+
+    $status = if ($scenarioPassed -and $issues.Count -eq 0) { "PASS" } else { "FAIL" }
+    $colour = if ($status -eq "PASS") { "Green" } else { "Red" }
+
+    Write-Host "Recommendation: $($result.recommendation)"
+    Write-Host "Score: $($result.matchScore)/100"
+    Write-Host "Gaps: $(@($result.gaps).Count)"
+    Write-Host "Time: $($call.Seconds)s"
+    Write-Host "Regression result: $status" -ForegroundColor $colour
+
+    foreach ($issue in $issues) {
+        $allIssues.Add("$($case.Name): $issue")
+        Write-Host " - $issue" -ForegroundColor Yellow
+    }
+
+    $summary.Add([pscustomobject]@{
+        Test = $case.Name
+        Status = $status
+        Recommendation = $result.recommendation
+        Score = $result.matchScore
+        Gaps = @($result.gaps).Count
+        Seconds = $call.Seconds
+    })
+}
+
+if ($haltAfterProviderFailure) {
+    $reportedNames = @($summary | ForEach-Object { $_.Test })
+    foreach ($remainingCase in $cases) {
+        if ($reportedNames -notcontains $remainingCase.Name) {
+            $summary.Add([pscustomobject]@{
+                Test = $remainingCase.Name
+                Status = "NOT RUN"
+                Recommendation = ""
+                Score = $null
+                Gaps = $null
+                Seconds = $null
+            })
+        }
+    }
+    $inconclusiveIssues.Add("Remaining scenarios were not called because the provider returned a shared transient/quota failure. Rerun after checking the provider detail above.")
+}
+
+$coreScenariosReady = $summary.Count -ge 3 -and
+    @($summary | Select-Object -First 3 | Where-Object { $_.Status -ne "PASS" }).Count -eq 0
+
+if (-not $SkipScoreStability -and $coreScenariosReady) {
+    Write-Host ""
+    Write-Host "Checking score stability for the three core scenarios..." -ForegroundColor Cyan
+
+    for ($caseIndex = 0; $caseIndex -lt 3; $caseIndex++) {
+        $stabilityCase = $cases[$caseIndex]
+        Write-Host "Scenario: $($stabilityCase.Name)" -ForegroundColor DarkCyan
+
+        for ($repeat = 2; $repeat -le 3; $repeat++) {
+            $call = Invoke-JobAnalysis -Case $stabilityCase
+            if (-not $call.Success) {
+                if ($call.StatusCode -eq 429 -or ($call.StatusCode -ge 500 -and $call.StatusCode -lt 600)) {
+                    $inconclusiveIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat was inconclusive after provider/connectivity HTTP $($call.StatusCode). Detail: $($call.Error)")
+                    Write-Host "Repeat $repeat inconclusive after HTTP $($call.StatusCode): $($call.Error)" -ForegroundColor Yellow
+                } else {
+                    $allIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat failed after $($call.Seconds)s - $($call.Error)")
+                    Write-Host "Repeat $repeat failed: $($call.Error)" -ForegroundColor Red
+                }
+                continue
+            }
+
+            $result = $call.Result
+            $scoreSamples[$stabilityCase.Name].Add([int]$result.matchScore)
+            Write-Host "Repeat $($repeat): score $($result.matchScore), recommendation $($result.recommendation), $($call.Seconds)s"
+
+            if (-not (Test-ExpectedScenario -Case $stabilityCase -Result $result)) {
+                $allIssues.Add("SCORE_STABILITY: '$($stabilityCase.Name)' repeat $repeat changed the expected recommendation/gap behaviour.")
+            }
+
+            foreach ($issue in @(Get-QualityIssues -Case $stabilityCase -Result $result)) {
+                $allIssues.Add("SCORE_STABILITY '$($stabilityCase.Name)' repeat $($repeat): $issue")
+            }
+        }
+
+        $scores = @($scoreSamples[$stabilityCase.Name].ToArray())
+        if ($scores.Count -eq 3) {
+            $minScore = ($scores | Measure-Object -Minimum).Minimum
+            $maxScore = ($scores | Measure-Object -Maximum).Maximum
+            $spread = $maxScore - $minScore
+            Write-Host "Scores: $($scores -join ', '); spread = $spread point(s)."
+
+            if ($spread -gt $ScoreTolerance) {
+                $allIssues.Add("SCORE_VARIANCE: '$($stabilityCase.Name)' varied by $spread points; allowed spread is $ScoreTolerance.")
+            } else {
+                Write-Host "Score stability: PASS (spread within $ScoreTolerance points)." -ForegroundColor Green
+            }
+        } else {
+            Write-Host "Score stability: INCONCLUSIVE ($($scores.Count)/3 responses available)." -ForegroundColor Yellow
+        }
+    }
+} elseif ($SkipScoreStability) {
+    Write-Host ""
+    Write-Host "Score stability check skipped by request." -ForegroundColor DarkYellow
+} elseif (-not $coreScenariosReady) {
+    $inconclusiveIssues.Add("Score stability check was skipped because one or more of the three core scenarios did not pass.")
+    Write-Host ""
+    Write-Host "Score stability check: INCONCLUSIVE because one or more core scenarios did not pass." -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "========== REGRESSION SUMMARY ==========" -ForegroundColor Cyan
+$summary | Format-Table Test, Status, Recommendation, Score, Gaps, Seconds -AutoSize
+
+if ($allIssues.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Quality issues detected:" -ForegroundColor Yellow
+    foreach ($issue in $allIssues) {
+        Write-Host " - $issue" -ForegroundColor Yellow
+    }
+
+    if ($inconclusiveIssues.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Additional inconclusive checks:" -ForegroundColor Yellow
+        foreach ($issue in $inconclusiveIssues) {
+            Write-Host " - $issue" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host ""
+    Write-Host "RESULT: FAIL ($($allIssues.Count) quality issue(s) detected)." -ForegroundColor Red
+    exit 1
+}
+
+if ($inconclusiveIssues.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Inconclusive checks:" -ForegroundColor Yellow
+    foreach ($issue in $inconclusiveIssues) {
+        Write-Host " - $issue" -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "RESULT: INCONCLUSIVE. Review the listed provider-limited checks and rerun when available." -ForegroundColor Yellow
+    exit 2
+}
+
+Write-Host ""
+Write-Host "RESULT: PASS. Scenario, evidence, question, and score checks succeeded." -ForegroundColor Green
+exit 0

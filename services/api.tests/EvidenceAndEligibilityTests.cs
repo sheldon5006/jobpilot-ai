@@ -1,0 +1,393 @@
+using JobPilot.Api.Models;
+using JobPilot.Api.Services;
+using Xunit;
+
+namespace JobPilot.Api.Tests;
+
+public sealed class EvidenceAndEligibilityTests
+{
+    [Fact]
+    public void IrrelevantAuthorizationQuestionIsRemoved()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "Build web applications using C#, ASP.NET Core, SQL Server, and REST APIs."
+        };
+        var profile = new CandidateProfile
+        {
+            ProfessionalSummary = "Software developer with web application experience.",
+            ProfessionalSkills = ["C#", "ASP.NET Core"]
+        };
+        var result = new JobAnalysisResult
+        {
+            QuestionsToVerify =
+            [
+                "Do you have valid, unrestricted authorization to work in the country where this position is based?",
+                "Are you legally authorized to work in Germany?",
+                "Do you require visa sponsorship?"
+            ],
+            Gaps = [new RequirementGap
+            {
+                Requirement = "work authorization",
+                Severity = "Must-have",
+                Status = "Unverified",
+                Explanation = "Model-generated irrelevant gap."
+            }]
+        };
+
+        JobRequirementRuleEngine.Apply(request, profile, result);
+
+        Assert.DoesNotContain(result.QuestionsToVerify,
+            question => question.Contains("authorization to work", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.QuestionsToVerify,
+            question => question.Contains("authorized to work", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.QuestionsToVerify,
+            question => question.Contains("visa sponsorship", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Gaps,
+            gap => gap.Requirement.Contains("work authorization", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExplicitAuthorizationConditionCreatesUnverifiedGateWhenProfileIsBlank()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "Applicants must already have the legal right to work in Germany. The employer cannot provide visa sponsorship. Build APIs using C# and SQL Server."
+        };
+        var result = new JobAnalysisResult();
+        JobRequirementRuleEngine.Apply(request, new CandidateProfile
+        {
+            ProfessionalSummary = "Software developer.",
+            ProfessionalSkills = ["C#", "SQL Server"]
+        }, result);
+
+        Assert.Contains(result.Gaps, gap =>
+            gap.Severity == "Must-have" &&
+            gap.Status == "Unverified" &&
+            gap.Requirement.Contains("work", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.QuestionsToVerify,
+            question => question.Contains("author", StringComparison.OrdinalIgnoreCase) ||
+                        question.Contains("work", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void UnsupportedRequirementsAreRemovedAndWarned()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "Build web applications using C#, ASP.NET Core, SQL Server, and Angular."
+        };
+        var result = new JobAnalysisResult
+        {
+            MatchedRequirements =
+            [
+                new MatchedRequirement
+                {
+                    Requirement = "Kubernetes and Angular",
+                    Evidence = "Angular",
+                    EvidenceIds = ["SKL-001"]
+                }
+            ],
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "German C2",
+                    Severity = "Must-have",
+                    Status = "Unmet",
+                    Explanation = "This requirement was never stated in the vacancy."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Empty(result.MatchedRequirements);
+        Assert.Empty(result.Gaps);
+        Assert.Equal(2, result.RequirementValidationWarnings.Count);
+        Assert.Equal("Review", result.Recommendation);
+    }
+
+    [Fact]
+    public void GermanProficiencyGapPreservesVacancyCeFRLevel()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "German language skills at CEFR C2 are mandatory for this position."
+        };
+        var result = new JobAnalysisResult
+        {
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "German proficiency (C2)",
+                    Severity = "Must-have",
+                    Status = "Unmet",
+                    Explanation = "The profile does not establish C2."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Single(result.Gaps);
+        Assert.Empty(result.RequirementValidationWarnings);
+    }
+
+    [Fact]
+    public void GermanProficiencyParaphraseMatchesVacancyLanguageSkillsWording()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = "Full-Stack Developer",
+            JobDescription = "German language skills are preferred but not mandatory."
+        };
+        var result = new JobAnalysisResult
+        {
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "German proficiency",
+                    Severity = "Preferred",
+                    Status = "Unmet",
+                    Explanation = "German is preferred."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Single(result.Gaps);
+        Assert.Empty(result.RequirementValidationWarnings);
+    }
+
+    [Fact]
+    public void AuthorizationRequirementMatchesEquivalentRightToWorkWording()
+    {
+        var request = new JobAnalysisRequest
+        {
+            JobTitle = ".NET Developer",
+            JobDescription = "Applicants must already have the legal right to work in Germany. The employer cannot provide visa sponsorship."
+        };
+        var result = new JobAnalysisResult
+        {
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "work authorization",
+                    Severity = "Must-have",
+                    Status = "Unverified",
+                    Explanation = "The vacancy explicitly requires existing work eligibility."
+                }
+            ]
+        };
+
+        VacancyRequirementValidator.Apply(request, result);
+
+        Assert.Single(result.Gaps);
+        Assert.Empty(result.RequirementValidationWarnings);
+    }
+
+    [Fact]
+    public void ProfessionalExperienceCannotBeProvenBySkillListAlone()
+    {
+        var profile = new CandidateProfile
+        {
+            ProfessionalSkills = ["Angular"]
+        };
+        var result = new JobAnalysisResult
+        {
+            MatchedRequirements =
+            [
+                new MatchedRequirement
+                {
+                    Requirement = "Practical development experience with Angular",
+                    Evidence = "Angular",
+                    EvidenceIds = ["SKL-001"]
+                }
+            ]
+        };
+
+        ProfileEvidenceValidator.Apply(profile, result);
+
+        Assert.Empty(result.MatchedRequirements);
+        Assert.NotEmpty(result.EvidenceValidationWarnings);
+        Assert.Equal("Review", result.Recommendation);
+    }
+
+    [Fact]
+    public void RealEducationClauseSurvivesFollowingPlaceholderInstructions()
+    {
+        var profile = new CandidateProfile
+        {
+            Education = ["M.Sc. Artificial Intelligence — in progress; replace institution and expected completion details as needed."]
+        };
+
+        var facts = ProfileEvidenceCatalog.Create(profile);
+        var educationFact = Assert.Single(facts.Where(fact => fact.Category == "education"));
+
+        Assert.Equal("M.Sc. Artificial Intelligence — in progress", educationFact.Text);
+    }
+
+    [Fact]
+    public void LearningLanguageLevelSurvivesTemplateGuidance()
+    {
+        var profile = new CandidateProfile
+        {
+            Languages = [new LanguageEntry
+            {
+                Language = "German",
+                Proficiency = "Learning; add a CEFR level only if verified"
+            }]
+        };
+
+        var languageFact = Assert.Single(ProfileEvidenceCatalog.Create(profile)
+            .Where(fact => fact.Category == "language"));
+
+        Assert.Equal("LAN-001", languageFact.Id);
+        Assert.Equal("German: Learning", languageFact.Text);
+    }
+
+    [Fact]
+    public void ReplacedLegacyApplicationsAreNotMistakenForPlaceholders()
+    {
+        var profile = new CandidateProfile
+        {
+            Experience =
+            [
+                new ExperienceEntry
+                {
+                    Role = "Software Engineer",
+                    Evidence = ["Replaced legacy VB applications with ASP.NET Core and Angular."]
+                }
+            ]
+        };
+
+        var facts = ProfileEvidenceCatalog.Create(profile);
+        Assert.Contains(facts, fact => fact.Text.StartsWith("Replaced legacy", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void EvidenceTextIsRenderedFromTheCitedProfileFact()
+    {
+        const string fact = "Designed and integrated REST APIs with Entity Framework and SQL Server.";
+        var profile = new CandidateProfile
+        {
+            Experience =
+            [
+                new ExperienceEntry
+                {
+                    Role = "Software Engineer",
+                    Evidence = [fact]
+                }
+            ]
+        };
+        var result = new JobAnalysisResult
+        {
+            MatchedRequirements =
+            [
+                new MatchedRequirement
+                {
+                    Requirement = "Professional experience with REST APIs",
+                    Evidence = "Fabricated evidence should be overwritten.",
+                    EvidenceIds = ["EXP-001"]
+                }
+            ]
+        };
+
+        ProfileEvidenceValidator.Apply(profile, result);
+
+        var match = Assert.Single(result.MatchedRequirements);
+        Assert.Equal(fact, match.Evidence);
+        Assert.Equal("EXP-001", Assert.Single(match.EvidenceIds));
+        Assert.Empty(result.EvidenceValidationWarnings);
+    }
+
+    [Fact]
+    public void MandatoryFailureIsSeparateFromFitScore()
+    {
+        var result = new JobAnalysisResult
+        {
+            Recommendation = "Apply",
+            MatchScore = 90,
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "German C2",
+                    Severity = "Must-have",
+                    Status = "Unmet",
+                    Explanation = "The profile states learning German, not C2."
+                }
+            ]
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal("Skip", result.Recommendation);
+        Assert.Equal("Not met", result.MandatoryRequirementsStatus);
+        Assert.Equal(50, result.MatchScore);
+    }
+
+    [Fact]
+    public void StrongVerifiedMatchOverridesInconsistentModelSkip()
+    {
+        var result = new JobAnalysisResult
+        {
+            Recommendation = "Skip",
+            MatchScore = 90
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal("Apply", result.Recommendation);
+        Assert.Equal("No unresolved mandatory gaps", result.MandatoryRequirementsStatus);
+    }
+
+    [Fact]
+    public void BelowThresholdMatchCannotRemainApply()
+    {
+        var result = new JobAnalysisResult
+        {
+            Recommendation = "Apply",
+            MatchScore = 75
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal("Review", result.Recommendation);
+        Assert.Equal("No unresolved mandatory gaps", result.MandatoryRequirementsStatus);
+    }
+
+    [Fact]
+    public void UnverifiedMandatoryRequirementProducesReviewStatus()
+    {
+        var result = new JobAnalysisResult
+        {
+            Recommendation = "Apply",
+            MatchScore = 85,
+            Gaps =
+            [
+                new RequirementGap
+                {
+                    Requirement = "Current student enrolment",
+                    Severity = "Must-have",
+                    Status = "Unverified",
+                    Explanation = "Current enrolment is not established."
+                }
+            ]
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal("Review", result.Recommendation);
+        Assert.Equal("Needs verification", result.MandatoryRequirementsStatus);
+    }
+}

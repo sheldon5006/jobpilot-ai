@@ -1,0 +1,100 @@
+{
+  "professionalSummary": "Replace this text with a short, factual summary of your professional software engineering experience and current studies.",
+  "targetRoles": [
+    "Werkstudent Software Development",
+    ".NET / C# Developer",
+    "Full-Stack Developer",
+    "ERP Software Developer",
+    "AI Application Developer",
+    "Application Support Engineer"
+  ],
+  "professionalSkills": [
+    "C#",
+    "ASP.NET Core",
+    "REST APIs",
+    "Entity Framework Core",
+    "SQL Server",
+    "PostgreSQL",
+    "Angular",
+    "TypeScript",
+    "JavaScript",
+    "HTML",
+    "CSS",
+    "Git",
+    "Azure DevOps",
+    "MVC",
+    "Dependency Injection",
+    "LINQ",
+    "ERP application development",
+    "Legacy application modernisation"
+  ],
+  "projectAndAcademicSkills": [
+    "Python",
+    "Machine Learning",
+    "Natural Language Processing",
+    "Retrieval-Augmented Generation",
+    "LLM API integration",
+    "Angular 20",
+    "PostgreSQL"
+  ],
+  "experience": [
+    {
+      "role": "Software Engineer",
+      "period": "Replace with accurate dates",
+      "evidence": [
+        "Modernised legacy VB applications into web applications using ASP.NET Core and Angular/TypeScript.",
+        "Delivered three enterprise projects to production.",
+        "Improved application performance by approximately 25% through architecture and database-access optimisation.",
+        "Designed and integrated REST APIs with Entity Framework and SQL Server."
+      ]
+    },
+    {
+      "role": "Software Engineer",
+      "period": "Replace with accurate dates",
+      "evidence": [
+        "Maintained and extended a modular ERP system used by multiple clients.",
+        "Worked on production, attendance, payroll and reporting functionality.",
+        "Implemented backend features with ASP.NET Core, LINQ and AngularJS."
+      ]
+    },
+    {
+      "role": "Software Developer Intern",
+      "period": "Replace with accurate dates",
+      "evidence": [
+        "Developed a student portal using PHP/Laravel.",
+        "Implemented backend logic and database integration.",
+        "Fixed bugs and security issues."
+      ]
+    }
+  ],
+  "education": [
+    "M.Sc. Artificial Intelligence — in progress; replace institution and expected completion details as needed.",
+    "Bachelor of Computer Applications — replace dates with verified course dates."
+  ],
+  "workAuthorization": "Replace with accurate country-specific work authorisation and sponsorship status; do not guess.",
+  "certifications": [],
+  "languages": [
+    {
+      "language": "English",
+      "proficiency": "Replace with your accurate proficiency"
+    },
+    {
+      "language": "Kannada",
+      "proficiency": "Native"
+    },
+    {
+      "language": "Hindi",
+      "proficiency": "Replace with your accurate proficiency"
+    },
+    {
+      "language": "German",
+      "proficiency": "Learning; add a CEFR level only if verified"
+    }
+  ],
+  "constraints": [
+    "Do not invent qualifications, employment dates, language levels, work authorisation, certifications, or achievements.",
+    "List only certifications and licences actually held; add current validity or expiry details when relevant.",
+    "Set workAuthorization only to an accurate, country-specific statement. Leave it as a placeholder until verified.",
+    "Ask me to verify any mandatory requirement that is not established by this profile."
+  ]
+}

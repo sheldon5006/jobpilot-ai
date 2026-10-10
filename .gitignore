@@ -7,6 +7,11 @@
 *.pem
 *.key
 
+# Local-only settings, database and candidate data; never commit real secrets or personal data
+services/api/jobpilot.db*
+services/api/appsettings.Local.json
+services/api/candidate-profile.json
+
 # Node / Angular
 node_modules/
 dist/
