@@ -21,7 +21,7 @@
         </div>
       </header>
 
-      <section id="signin-panel" class="tool-card signin-panel" aria-labelledby="signin-title" hidden>
+      <section id="signin-panel" class="tool-card signin-panel" aria-labelledby="signin-title">
         <p class="eyebrow">PRIVATE WORKSPACE</p>
         <h2 id="signin-title">Sign in to DBot</h2>
         <p class="tool-card-copy">Your profile, job history and CVs are private. Sign in with the Google account allowed on your JobPilot API.</p>
@@ -30,6 +30,7 @@
           <span>Sign in with Google</span>
         </button>
         <p id="signin-status" class="page-fetch-status" role="status"></p>
+        <p class="field-hint">API: <span id="signin-api-url"></span></p>
         <details class="prompt-layer">
           <summary>Setting up Google sign-in?</summary>
           <p class="field-hint">Add this exact address under <strong>Authorized redirect URIs</strong> of your Google OAuth client:</p>
@@ -37,7 +38,7 @@
         </details>
       </section>
 
-      <div id="app-content">
+      <div id="app-content" hidden>
       <nav class="tab-bar" role="tablist" aria-label="DBot sections">
         <button id="tab-job" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="panel-job" data-tab="job">Job</button>
         <button id="tab-profile" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="panel-profile" data-tab="profile">My profile</button>

@@ -13,6 +13,7 @@ const appContent = element<HTMLElement>("#app-content");
 const accountRow = element<HTMLElement>("#account-row");
 const accountEmail = element<HTMLElement>("#account-email");
 const signOutButton = element<HTMLButtonElement>("#sign-out-button");
+const signInApiUrl = element<HTMLElement>("#signin-api-url");
 
 let config: AuthConfig | null = null;
 
@@ -30,10 +31,22 @@ function showApp(email: string | null): void {
   accountEmail.textContent = email ?? "";
 }
 
+const isLocalApi = /^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(API_BASE_URL);
+
 async function loadConfig(): Promise<AuthConfig> {
   if (!config) {
-    const response = await fetch(`${API_BASE_URL}/api/auth/config`);
-    if (!response.ok) throw new Error(`The API returned HTTP ${response.status}.`);
+    // A sleeping free server can take about a minute to wake; don't wait forever.
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 90_000);
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/api/auth/config`, { signal: controller.signal });
+    } catch {
+      throw new Error(`Can't reach the JobPilot API at ${API_BASE_URL}. Check that this is your API's exact address (Render → jobpilot-api → URL), then try again.`);
+    } finally {
+      window.clearTimeout(timeout);
+    }
+    if (!response.ok) throw new Error(`The API at ${API_BASE_URL} returned HTTP ${response.status}. Check the Render logs for jobpilot-api.`);
     config = (await response.json()) as AuthConfig;
   }
   return config;
@@ -49,7 +62,11 @@ async function signInWithGoogle(): Promise<void> {
   signInButton.disabled = true;
   setStatus(signInStatus, "Opening Google sign-in…");
   try {
-    const { googleClientId } = await loadConfig();
+    const { enabled, googleClientId } = await loadConfig();
+    if (!enabled) {
+      showApp(null);
+      return;
+    }
     if (!googleClientId) throw new Error("The API has no Google client configured.");
 
     const nonce = crypto.randomUUID();
@@ -92,16 +109,29 @@ export async function initAuth(): Promise<boolean> {
   });
   onSignInRequired(() => showSignIn("Your session has ended. Sign in again to continue."));
 
+  signInApiUrl.textContent = API_BASE_URL;
+  showSignIn();
+  setStatus(signInStatus, isLocalApi
+    ? "Connecting to the local API…"
+    : "Connecting to your JobPilot API… a free server can take up to a minute to wake up.");
+  signInButton.disabled = true;
+
   try {
     const { enabled } = await loadConfig();
     if (!enabled) {
       showApp(null);
       return true;
     }
-  } catch {
-    // The API may be asleep or offline. Show the app; requests will explain the problem.
-    showApp(null);
-    return true;
+  } catch (error) {
+    if (isLocalApi) {
+      // Local development: show the app; requests explain how to start the API.
+      showApp(null);
+      return true;
+    }
+    showSignIn(`${error instanceof Error ? error.message : "Can't reach the JobPilot API."} Choosing Sign in retries the connection.`);
+    return false;
+  } finally {
+    signInButton.disabled = false;
   }
 
   const session = await getSession();
