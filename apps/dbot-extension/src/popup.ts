@@ -11,8 +11,19 @@ interface JobAnalysisResult {
   englishSummary?: string;
   keyRequirements?: string[];
   candidateExpectations?: string[];
-  matchedRequirements?: Array<{ requirement?: string }>;
+  matchedRequirements?: Array<{ requirement?: string; importance?: string; evidenceStrength?: string }>;
   gaps?: Array<{ requirement?: string; severity?: string; status?: string }>;
+  scoreBreakdown?: {
+    mustHaveMet: number;
+    mustHaveTotal: number;
+    preferredMet: number;
+    preferredTotal: number;
+    professionalEvidence: number;
+    internshipEvidence: number;
+    projectEvidence: number;
+    capReason?: string | null;
+    confidence?: string;
+  } | null;
 }
 
 interface ExtractedJobDetails {
@@ -81,6 +92,9 @@ const englishSummary = element<HTMLElement>("#english-summary");
 const keyRequirementsList = element<HTMLUListElement>("#key-requirements-list");
 const candidateExpectationsList = element<HTMLUListElement>("#candidate-expectations-list");
 const resultCopy = element<HTMLElement>("#result-copy");
+const scoreBreakdown = element<HTMLElement>("#score-breakdown");
+const scoreBreakdownList = element<HTMLUListElement>("#score-breakdown-list");
+const scoreBreakdownNote = element<HTMLElement>("#score-breakdown-note");
 
 const togglePageToolsButton = element<HTMLButtonElement>("#toggle-page-tools-button");
 const pageToolsContent = element<HTMLDivElement>("#page-tools-content");
@@ -272,10 +286,54 @@ function renderAnalysis(result: JobAnalysisResult): void {
     || "An English role summary was not returned. Review the job description above.";
   renderKeyRequirements(result);
   renderCandidateExpectations(result);
-  resultCopy.textContent = strongFit ? "Strong fit" : "Not a strong fit";
+  const verdict = result.recommendation.trim().toLowerCase();
+  resultCopy.textContent = verdict === "apply" ? "Strong fit · Apply" : verdict === "skip" ? "Poor fit · Skip" : "Partial fit · Review";
   resultCopy.className = `result-copy fit-verdict ${strongFit ? "strong-fit" : "not-strong-fit"}`;
+  renderScoreBreakdown(result);
   resultPanel.classList.remove("error-state");
   resultPanel.hidden = false;
+}
+
+/** Shows why the score is what it is: requirement coverage, evidence sources and any cap. */
+function renderScoreBreakdown(result: JobAnalysisResult): void {
+  const breakdown = result.scoreBreakdown;
+  scoreBreakdownList.replaceChildren();
+  if (!breakdown) {
+    scoreBreakdown.hidden = true;
+    return;
+  }
+
+  const rows: Array<[string, string]> = [];
+  if (breakdown.mustHaveTotal > 0) rows.push(["Must-haves", `${breakdown.mustHaveMet}/${breakdown.mustHaveTotal} met`]);
+  if (breakdown.preferredTotal > 0) rows.push(["Nice-to-haves", `${breakdown.preferredMet}/${breakdown.preferredTotal} met`]);
+  const evidence = [
+    breakdown.professionalEvidence ? `${breakdown.professionalEvidence} work` : "",
+    breakdown.internshipEvidence ? `${breakdown.internshipEvidence} internship` : "",
+    breakdown.projectEvidence ? `${breakdown.projectEvidence} project/study` : ""
+  ].filter(Boolean).join(" · ");
+  if (evidence) rows.push(["Evidence", evidence]);
+
+  for (const [label, value] of rows) {
+    const item = document.createElement("li");
+    const name = document.createElement("span");
+    name.textContent = label;
+    const amount = document.createElement("strong");
+    amount.textContent = value;
+    item.append(name, amount);
+    scoreBreakdownList.append(item);
+  }
+
+  const missingMustHaves = (result.gaps ?? [])
+    .filter(gap => gap.severity?.toLowerCase() === "must-have")
+    .map(gap => `${gap.requirement}${gap.status?.toLowerCase() === "unmet" ? " (not met)" : " (unverified)"}`);
+  const notes = [
+    breakdown.capReason ?? "",
+    missingMustHaves.length > 0 ? `Missing: ${missingMustHaves.slice(0, 3).join("; ")}.` : "",
+    breakdown.confidence === "Low" ? "Few explicit requirements, so this score is less certain." : ""
+  ].filter(Boolean);
+  scoreBreakdownNote.textContent = notes.join(" ");
+  scoreBreakdownNote.hidden = notes.length === 0;
+  scoreBreakdown.hidden = rows.length === 0 && notes.length === 0;
 }
 
 function renderError(message: string): void {
@@ -287,6 +345,7 @@ function renderError(message: string): void {
   englishSummary.textContent = "The role summary is unavailable because the analysis did not complete.";
   keyRequirementsList.replaceChildren();
   candidateExpectationsList.replaceChildren();
+  scoreBreakdown.hidden = true;
   resultCopy.textContent = message;
   resultCopy.className = "result-copy fit-verdict error-copy";
   resultPanel.hidden = false;

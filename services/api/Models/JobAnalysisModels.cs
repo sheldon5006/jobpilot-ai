@@ -28,6 +28,9 @@ public sealed class JobAnalysisResult
     public List<string> EvidenceValidationWarnings { get; set; } = [];
     public List<string> RequirementValidationWarnings { get; set; } = [];
 
+    // How the evidence-based fit score was computed. Filled by the API, never by the model.
+    public FitScoreBreakdown? ScoreBreakdown { get; set; }
+
     // DBot provides decision support only; it never submits an application.
     public bool RequiresHumanReview { get; set; } = true;
     public string Note { get; set; } = "Recommendation only. No application has been submitted.";
@@ -36,8 +39,33 @@ public sealed class JobAnalysisResult
 public sealed class MatchedRequirement
 {
     public string Requirement { get; set; } = string.Empty;
+
+    // Must-have, Preferred or Unknown, as stated in the vacancy.
+    public string Importance { get; set; } = "Unknown";
+
+    // The exact vacancy wording this requirement comes from (original language); used to verify it.
+    public string VacancyQuote { get; set; } = string.Empty;
     public string Evidence { get; set; } = string.Empty;
     public List<string> EvidenceIds { get; set; } = [];
+
+    // Professional, Internship, Project or None; derived by the API from the cited facts.
+    public string EvidenceStrength { get; set; } = string.Empty;
+}
+
+public sealed class FitScoreBreakdown
+{
+    public int MustHaveMet { get; set; }
+    public int MustHaveTotal { get; set; }
+    public int PreferredMet { get; set; }
+    public int PreferredTotal { get; set; }
+    public int ProfessionalEvidence { get; set; }
+    public int InternshipEvidence { get; set; }
+    public int ProjectEvidence { get; set; }
+
+    // Score before any mandatory-gap cap was applied.
+    public int CoverageScore { get; set; }
+    public string? CapReason { get; set; }
+    public string Confidence { get; set; } = "Normal";
 }
 
 public sealed class RequirementGap
@@ -48,6 +76,12 @@ public sealed class RequirementGap
     // Unverified means the profile does not establish the requirement.
     // Unmet means the profile explicitly conflicts with the requirement.
     public string Status { get; set; } = "Unverified";
+
+    // The exact vacancy wording this requirement comes from (original language); used to verify it.
+    public string VacancyQuote { get; set; } = string.Empty;
+
+    // For Unmet: the profile facts that contradict the requirement. Unmet without them becomes Unverified.
+    public List<string> ConflictEvidenceIds { get; set; } = [];
 
     public string Explanation { get; set; } = string.Empty;
 }

@@ -118,6 +118,12 @@ public static class ProfileEvidenceCatalog
         }
 
         Add("AUTH", "work_authorization", "Work authorization", profile.WorkAuthorization);
+
+        // Candidate-stated circumstances such as location or availability.
+        foreach (var note in profile.Constraints ?? [])
+        {
+            Add("NOTE", "candidate_note", "Candidate notes", note);
+        }
         return facts;
     }
 

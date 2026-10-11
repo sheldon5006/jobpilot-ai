@@ -63,30 +63,41 @@ Keep the `Gemini` section if you may want to switch back later; no Gemini API ke
 
 **After changing the provider or model, restart the ASP.NET Core API.**
 
-## Score calibration
+## How the fit score works
 
-The model supplies an initial 0–100 fit estimate. The backend then reconciles explicitly stated requirements against the local candidate profile. Deterministic eligibility checks cover:
-- Existing right-to-work conditions and explicit no-sponsorship clauses (only when the vacancy states them).
-- Explicit minimum relevant professional experience, using the profile summary or complete dated work history.
-- Required professional certifications/licences and security clearance, checked against `certifications`.
-- Current university enrolment for Werkstudent/working-student roles, checked against active/in-progress education entries.
-- Explicit English/German requirements and CEFR levels.
+The fit score is computed by the API from requirement-level evidence. The model does not choose it.
 
-Missing profile facts are treated as Unverified rather than assumed to be absent. An explicit conflict with a mandatory requirement is Unmet. Sponsorship availability alone is not treated as a disqualifier.
+1. **Requirements.** The model lists every distinct requirement stated in the vacancy (up to 10) exactly once. Each one is a match or a gap, and is marked Must-have, Preferred or Unknown. For each requirement it quotes the vacancy wording in the vacancy's own language. The API keeps a requirement only if that quote is found in the vacancy, so English requirement names from German job ads stay grounded and invented requirements are dropped.
+2. **Evidence.** A match must cite profile-fact IDs. Its credit depends on where the cited facts come from:
 
-After those checks, the backend applies deterministic deductions to distinct gaps:
+   | Evidence | Credit |
+   | --- | --- |
+   | Work experience, dates, education, languages, certifications | 100% |
+   | Professional skills list | 85% |
+   | Internship | 80% |
+   | Professional summary or candidate notes | 70% |
+   | Personal or academic projects | 60% |
 
-- Explicitly unmet must-have gap: 40 points each, capped at 50 points.
-- Unverified must-have gap: 20 points each, capped at 50 points.
-- Preferred gap: 5 points each, capped at 20 points.
-- Gap whose severity is missing or unrecognised: 8 points each, capped at 24 points.
-- Total deduction is capped at 60 points; the final score is constrained to 0–100.
-- Duplicate gap requirements are counted once, using the highest applicable deduction.
-- A clearly unmet must-have requirement forces `Skip`; an unverified must-have requirement forces `Review`. Preferred gaps do not block `Apply` by themselves.
-- The fit score remains an estimate after transparent gap deductions; it is not forced to an arbitrary fixed score when a mandatory requirement fails. The response separately exposes mandatoryRequirementsStatus as Not met, Needs verification, or No unresolved mandatory gaps. A mandatory Unmet condition forces Skip; a mandatory Unverified condition forces Review.
-- A language gap is only scored when the vacancy explicitly states that language as required or preferred. The job ad is not evidence of the candidate's language proficiency.
+   When several facts are cited, their credits are averaged. A match whose cited facts don't establish the requirement becomes an Unverified gap, so the requirement still counts against the score.
+3. **Gaps.** An Unverified gap earns 25% of its weight. An Unmet gap earns nothing, and the model may only mark a gap Unmet if it cites the profile fact that contradicts the requirement, such as the candidate's location against a required on-site city. Otherwise the gap is Unverified.
+4. **Score.** The score is the weighted coverage × 100, where Must-have counts 3, Unknown 2 and Preferred 1. With fewer than three requirements, the score is pulled towards 50 and marked low-confidence.
+5. **Caps and recommendation.**
+   - An Unmet must-have caps the score at 35 and gives **Skip**.
+   - An Unverified must-have caps it at 74, which is below the Apply threshold.
+   - **Apply** needs a score of 75 or more with only preferred gaps. A score below 40 is **Skip**. Everything else is **Review**.
 
-These weights are a transparent heuristic, not a statistically validated probability of receiving an interview or offer. Evaluate them against labelled vacancies before treating scores as predictive.
+Deterministic eligibility checks still run before scoring:
+- right-to-work and sponsorship conditions, when the vacancy states them;
+- minimum experience, using dated work history;
+- required certifications;
+- current enrolment for working-student roles;
+- explicit English or German CEFR levels.
+
+Missing profile facts are Unverified, never assumed absent.
+
+The model runs at temperature 0 with a fixed seed, so the same vacancy and profile give the same assessment. In a check on 10 saved vacancies, each analysed twice, every score was identical across the two runs. The profile is sent once, as a compact fact list grouped by section, which roughly halves the prompt size compared with the earlier JSON-plus-facts prompt.
+
+The weights are a transparent heuristic, not a statistically validated probability of an interview or offer. The response includes `scoreBreakdown`: must-haves met/total, preferred met/total, evidence sources, any cap and a confidence flag.
 
 ## 3. Saved job history and dashboard
 

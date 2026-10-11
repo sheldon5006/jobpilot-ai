@@ -4,9 +4,11 @@ using JobPilot.Api.Models;
 namespace JobPilot.Api.Services;
 
 /// <summary>
-/// Removes AI-generated matches and gaps whose substantive requirement terms do not
-/// map back to the actual vacancy. Deterministic rules run before this validator and
-/// therefore contribute only requirements derived from explicit vacancy conditions.
+/// Removes AI-generated matches and gaps that cannot be traced to the actual vacancy. The model quotes
+/// the vacancy wording each requirement comes from (in the vacancy's own language); the quote must be
+/// found in the vacancy. Without a quote, every substantive word of the requirement must appear in it.
+/// Deterministic rules run before this validator and contribute only requirements derived from explicit
+/// vacancy conditions.
 /// </summary>
 public static class VacancyRequirementValidator
 {
@@ -33,6 +35,13 @@ public static class VacancyRequirementValidator
     private static readonly Regex TokenPattern = new(
         @"[a-z0-9+#.]+",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    // Unicode-aware, so German words such as "Größe" or "Abschluss" stay intact.
+    private static readonly Regex QuoteTokenPattern = new(
+        @"[\p{L}\p{N}+#]+(?:\.[\p{L}\p{N}]+)*",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private const double MinimumQuoteCoverage = 0.8;
 
     private static readonly HashSet<string> GenericWords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -67,6 +76,7 @@ public static class VacancyRequirementValidator
 
         var vacancy = $"{request.JobTitle}\n{request.JobDescription}";
         var vacancyTokens = GetTokens(vacancy);
+        var vacancyQuoteTokens = GetQuoteTokens(vacancy).ToHashSet(StringComparer.Ordinal);
         var warnings = new List<string>();
 
         result.MatchedRequirements = (result.MatchedRequirements ?? [])
@@ -78,7 +88,7 @@ public static class VacancyRequirementValidator
                     return false;
                 }
 
-                if (IsGrounded(match.Requirement, vacancyTokens))
+                if (IsQuoted(match.VacancyQuote, vacancyQuoteTokens) || IsGrounded(match.Requirement, vacancyTokens))
                 {
                     return true;
                 }
@@ -97,7 +107,7 @@ public static class VacancyRequirementValidator
                     return false;
                 }
 
-                if (IsGrounded(gap.Requirement, vacancyTokens))
+                if (IsQuoted(gap.VacancyQuote, vacancyQuoteTokens) || IsGrounded(gap.Requirement, vacancyTokens))
                 {
                     return true;
                 }
@@ -117,6 +127,28 @@ public static class VacancyRequirementValidator
                 "One or more model-generated requirements could not be traced to the vacancy and were removed. Review the requirement-validation warnings before relying on the recommendation.");
         }
     }
+
+    /// <summary>
+    /// True when the quoted wording is (almost) verbatim in the vacancy: at least 80% of its words, and
+    /// at least two words, must occur there. This tolerates small punctuation or inflection changes.
+    /// </summary>
+    private static bool IsQuoted(string? quote, IReadOnlySet<string> vacancyQuoteTokens)
+    {
+        var tokens = GetQuoteTokens(quote ?? string.Empty);
+        if (tokens.Count < 2)
+        {
+            return tokens.Count == 1 && tokens[0].Length >= 3 && vacancyQuoteTokens.Contains(tokens[0]);
+        }
+
+        var found = tokens.Count(vacancyQuoteTokens.Contains);
+        return (double)found / tokens.Count >= MinimumQuoteCoverage;
+    }
+
+    private static List<string> GetQuoteTokens(string text) =>
+        QuoteTokenPattern.Matches(text.ToLowerInvariant())
+            .Select(match => match.Value.Trim('.'))
+            .Where(token => token.Length > 0)
+            .ToList();
 
     private static bool IsGrounded(string requirement, IReadOnlySet<string> vacancyTokens)
     {

@@ -310,13 +310,22 @@ public sealed class EvidenceAndEligibilityTests
         Assert.Empty(result.EvidenceValidationWarnings);
     }
 
+    private static MatchedRequirement Match(string requirement, string importance, params string[] evidenceIds) => new()
+    {
+        Requirement = requirement,
+        Importance = importance,
+        Evidence = "Supported by the profile.",
+        EvidenceIds = [.. evidenceIds]
+    };
+
     [Fact]
-    public void MandatoryFailureIsSeparateFromFitScore()
+    public void UnmetMandatoryRequirementCapsScoreAndForcesSkip()
     {
         var result = new JobAnalysisResult
         {
             Recommendation = "Apply",
             MatchScore = 90,
+            MatchedRequirements = [Match("C#", "Must-have", "EXP-001"), Match("Angular", "Must-have", "EXP-002")],
             Gaps =
             [
                 new RequirementGap
@@ -333,46 +342,71 @@ public sealed class EvidenceAndEligibilityTests
 
         Assert.Equal("Skip", result.Recommendation);
         Assert.Equal("Not met", result.MandatoryRequirementsStatus);
-        Assert.Equal(50, result.MatchScore);
+        Assert.True(result.MatchScore <= 35);
+        Assert.Equal(1, result.ScoreBreakdown!.MustHaveTotal - result.ScoreBreakdown.MustHaveMet);
     }
 
     [Fact]
-    public void StrongVerifiedMatchOverridesInconsistentModelSkip()
+    public void FullyEvidencedProfessionalMatchIsApplyRegardlessOfModelLabel()
     {
         var result = new JobAnalysisResult
         {
             Recommendation = "Skip",
-            MatchScore = 90
+            MatchScore = 10,
+            MatchedRequirements =
+            [
+                Match("C#", "Must-have", "EXP-001"),
+                Match("ASP.NET Core", "Must-have", "EXP-002"),
+                Match("Angular", "Must-have", "EXP-003"),
+                Match("Azure DevOps", "Preferred", "SKL-004")
+            ]
         };
 
         JobFitScoreCalibrator.Apply(result);
 
         Assert.Equal("Apply", result.Recommendation);
+        Assert.True(result.MatchScore >= 95);
         Assert.Equal("No unresolved mandatory gaps", result.MandatoryRequirementsStatus);
+        Assert.Equal(3, result.ScoreBreakdown!.MustHaveMet);
+        Assert.Equal(1, result.ScoreBreakdown.PreferredMet);
     }
 
     [Fact]
-    public void BelowThresholdMatchCannotRemainApply()
+    public void ProjectOnlyEvidenceScoresLowerThanProfessionalEvidence()
     {
-        var result = new JobAnalysisResult
+        JobAnalysisResult Build(string prefix) => new()
         {
-            Recommendation = "Apply",
-            MatchScore = 75
+            MatchedRequirements =
+            [
+                Match("Python", "Must-have", $"{prefix}-001"),
+                Match("Machine learning", "Must-have", $"{prefix}-002"),
+                Match("REST APIs", "Must-have", $"{prefix}-003")
+            ]
         };
 
-        JobFitScoreCalibrator.Apply(result);
+        var professional = Build("EXP");
+        var project = Build("PJT");
+        JobFitScoreCalibrator.Apply(professional);
+        JobFitScoreCalibrator.Apply(project);
 
-        Assert.Equal("Review", result.Recommendation);
-        Assert.Equal("No unresolved mandatory gaps", result.MandatoryRequirementsStatus);
+        Assert.Equal(100, professional.MatchScore);
+        Assert.Equal(60, project.MatchScore);
+        Assert.Equal("Review", project.Recommendation);
+        Assert.Equal(3, project.ScoreBreakdown!.ProjectEvidence);
     }
 
     [Fact]
-    public void UnverifiedMandatoryRequirementProducesReviewStatus()
+    public void UnverifiedMandatoryRequirementCapsBelowApply()
     {
         var result = new JobAnalysisResult
         {
             Recommendation = "Apply",
-            MatchScore = 85,
+            MatchedRequirements =
+            [
+                Match("C#", "Must-have", "EXP-001"),
+                Match("SQL Server", "Must-have", "EXP-002"),
+                Match("Angular", "Must-have", "EXP-003")
+            ],
             Gaps =
             [
                 new RequirementGap
@@ -389,5 +423,53 @@ public sealed class EvidenceAndEligibilityTests
 
         Assert.Equal("Review", result.Recommendation);
         Assert.Equal("Needs verification", result.MandatoryRequirementsStatus);
+        Assert.True(result.MatchScore < JobFitScoreCalibrator.ApplyThreshold);
+        Assert.NotNull(result.ScoreBreakdown!.CapReason);
+    }
+
+    [Fact]
+    public void LowCoverageIsSkip()
+    {
+        var result = new JobAnalysisResult
+        {
+            MatchedRequirements = [Match("Teamwork", "Preferred", "SUM-001")],
+            Gaps =
+            [
+                new RequirementGap { Requirement = "Building physics", Severity = "Must-have", Status = "Unverified" },
+                new RequirementGap { Requirement = "Energy simulation tools", Severity = "Must-have", Status = "Unverified" },
+                new RequirementGap { Requirement = "HVAC knowledge", Severity = "Must-have", Status = "Unverified" }
+            ]
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.True(result.MatchScore < JobFitScoreCalibrator.SkipThreshold);
+        Assert.Equal("Skip", result.Recommendation);
+    }
+
+    [Fact]
+    public void RequirementListedAsMatchAndGapCountsOnceAsGap()
+    {
+        var result = new JobAnalysisResult
+        {
+            MatchedRequirements = [Match("Kubernetes", "Must-have", "PRJ-001"), Match("C#", "Must-have", "EXP-001"), Match("SQL", "Must-have", "EXP-002")],
+            Gaps = [new RequirementGap { Requirement = "kubernetes", Severity = "Must-have", Status = "Unverified" }]
+        };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal(2, result.ScoreBreakdown!.MustHaveMet);
+        Assert.Equal(3, result.ScoreBreakdown.MustHaveTotal);
+    }
+
+    [Fact]
+    public void FewRequirementsLowerConfidenceAndPullTowardsMiddle()
+    {
+        var result = new JobAnalysisResult { MatchedRequirements = [Match("C#", "Must-have", "EXP-001")] };
+
+        JobFitScoreCalibrator.Apply(result);
+
+        Assert.Equal("Low", result.ScoreBreakdown!.Confidence);
+        Assert.Equal(75, result.MatchScore);
     }
 }
