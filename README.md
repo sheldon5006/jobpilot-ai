@@ -62,3 +62,10 @@ DBot is intended to analyse job information the user is permitted to access and 
 ## Development approach
 
 We build and test one small milestone at a time. Each milestone should have a clear purpose, reproducible local checks, and documentation before moving on.
+
+<img width="647" height="626" alt="image" src="https://github.com/user-attachments/assets/3cccadb5-46f1-4d07-820f-e6e8efff1180" />
+<img width="1917" height="868" alt="image" src="https://github.com/user-attachments/assets/e77c89f2-a243-46f7-97a0-49b77772aab0" />
+<img width="565" height="867" alt="image" src="https://github.com/user-attachments/assets/5c1b2e49-3ee0-4e80-b641-5ffec45f7149" />
+
+
+
